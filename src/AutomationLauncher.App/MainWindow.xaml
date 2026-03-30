@@ -4,12 +4,13 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Automation Launcher - TIA Portal Archiver"
-        Width="1000"
-        Height="680"
-        MinWidth="880"
-        MinHeight="580"
+        Title="Automation Launcher - Tray Dashboard"
+        Width="960"
+        Height="720"
+        MinWidth="820"
+        MinHeight="620"
         WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="False"
         Background="#F4F7F8">
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -19,12 +20,16 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Border Padding="16" Background="#0D1B2A" CornerRadius="12">
+        <Border Padding="18" Background="#0D1B2A" CornerRadius="12">
             <StackPanel>
-                <TextBlock Text="TIA Portal V15+ Project Archiver" Foreground="White" FontSize="24" FontWeight="SemiBold" />
-                <TextBlock Text="Production workflow: resolve matching Openness runtime, verify process, save if needed, archive and log everything."
+                <TextBlock Text="Automation Launcher" Foreground="White" FontSize="26" FontWeight="SemiBold" />
+                <TextBlock Text="The application works primarily from the tray icon. Use this dashboard for status, diagnostics and manual actions."
                            Foreground="#D8E2EA"
                            Margin="0,8,0,0" />
+                <TextBlock Text="{Binding AppVersion, StringFormat=Version {0}}"
+                           Foreground="#BFD4E2"
+                           Margin="0,8,0,0"
+                           FontWeight="SemiBold" />
             </StackPanel>
         </Border>
 
@@ -33,62 +38,26 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <TextBlock Text="Configured project path" FontWeight="SemiBold" />
-                <TextBox Grid.Row="1" Text="{Binding ExpectedProjectPath, UpdateSourceTrigger=PropertyChanged}" Margin="0,8,12,0" Padding="8" />
-
-                <TextBlock Grid.Column="1" Text="Archive output directory" FontWeight="SemiBold" />
-                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ArchiveOutputDirectory, UpdateSourceTrigger=PropertyChanged}" Margin="0,8,0,0" Padding="8" />
-
-                <CheckBox Grid.Row="2" Margin="0,14,0,0" Content="Try detect unsaved changes" IsChecked="{Binding TryDetectUnsavedChanges}" />
-                <CheckBox Grid.Row="2" Grid.Column="1" Margin="0,14,0,0" Content="Force save when detection is unavailable" IsChecked="{Binding ForceSaveWhenDetectionUnavailable}" />
-
-                <TextBlock Grid.Row="3" Text="TIA runtime selection mode" FontWeight="SemiBold" Margin="0,16,12,0" />
-                <ComboBox Grid.Row="4"
-                          Margin="0,8,12,0"
-                          Padding="8"
-                          ItemsSource="{Binding TiaRuntimeSelectionModes}"
-                          SelectedItem="{Binding TiaRuntimeSelectionMode, UpdateSourceTrigger=PropertyChanged}" />
-
-                <TextBlock Grid.Row="3" Grid.Column="1" Text="Preferred TIA runtime" FontWeight="SemiBold" Margin="0,16,0,0" />
-                <ComboBox Grid.Row="4"
-                          Grid.Column="1"
-                          Margin="0,8,0,0"
-                          Padding="8"
-                          ItemsSource="{Binding AvailableTiaRuntimes}"
-                          SelectedItem="{Binding SelectedTiaRuntime, UpdateSourceTrigger=PropertyChanged}" />
-
-                <TextBlock Grid.Row="5"
-                           Grid.ColumnSpan="2"
-                           Margin="0,10,0,0"
-                           Foreground="#5B6A72"
-                           TextWrapping="Wrap"
-                           Text="{Binding RuntimeCatalogStatus}" />
-
-                <Button Grid.Row="6"
-                    Margin="0,16,12,0"
+                <Button Margin="0,0,12,0"
                     Height="38"
-                    Content="Sync Project From TIA"
+                    Content="Archive now"
                     FontSize="13"
                     FontWeight="SemiBold"
-                    Background="#5B6A72"
+                    Background="#1B4965"
                     Foreground="White"
-                    BorderBrush="#5B6A72"
-                    Command="{Binding SyncProjectFromTiaCommand}" />
+                    BorderBrush="#1B4965"
+                    Command="{Binding ArchiveCommand}" />
 
-                <Button Grid.Row="6"
-                    Grid.Column="1"
-                    Margin="0,16,0,0"
+                <Button Grid.Column="1"
+                    Margin="0,0,12,0"
                     Height="38"
                     Content="Check TIA Connection"
                     FontSize="13"
@@ -98,17 +67,27 @@
                     BorderBrush="#1A6B3A"
                     Command="{Binding CheckTiaConnectionCommand}" />
 
-                <Button Grid.Row="7"
-                        Grid.ColumnSpan="2"
-                        Margin="0,16,0,0"
-                        Height="42"
-                        Content="Archive Now"
-                        FontSize="15"
+                <Button Grid.Column="2"
+                        Height="38"
+                    Margin="0,0,12,0"
+                        Content="Sync project from TIA"
+                        FontSize="13"
                         FontWeight="SemiBold"
-                        Background="#1B4965"
+                        Background="#5B6A72"
                         Foreground="White"
-                        BorderBrush="#1B4965"
-                        Command="{Binding ArchiveCommand}" />
+                        BorderBrush="#5B6A72"
+                        Command="{Binding SyncProjectFromTiaCommand}" />
+
+                <Button Grid.Column="3"
+                    Width="120"
+                    Height="38"
+                    Content="Settings"
+                    FontSize="13"
+                    FontWeight="SemiBold"
+                    Background="#D9E4EC"
+                    Foreground="#0D1B2A"
+                    BorderBrush="#B9C7D3"
+                    Click="Settings_Click" />
             </Grid>
         </Border>
 
@@ -129,8 +108,9 @@
                 <TextBlock Text="Runtime status" FontSize="18" FontWeight="SemiBold" />
                 <TextBlock Grid.Row="1" Margin="0,10,0,0" Text="{Binding StatusMessage}" TextWrapping="Wrap" />
                 <TextBlock Grid.Row="2" Margin="0,10,0,0" Foreground="#5B6A72" Text="{Binding RuntimeDecisionMessage}" TextWrapping="Wrap" />
+                <TextBlock Grid.Row="3" Margin="0,10,0,0" Foreground="#5B6A72" Text="{Binding SettingsStatusMessage}" TextWrapping="Wrap" />
 
-                <Grid Grid.Row="3" Margin="0,12,0,0">
+                <Grid Grid.Row="4" Margin="0,12,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="220" />
                         <ColumnDefinition Width="*" />
@@ -141,28 +121,62 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <TextBlock Text="Detected process version" FontWeight="SemiBold" />
-                    <TextBlock Grid.Column="1" Text="{Binding DetectedProcessVersion}" TextWrapping="Wrap" />
+                    <TextBlock Text="Host name" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="1" Text="{Binding HostName}" TextWrapping="Wrap" />
 
-                    <TextBlock Grid.Row="1" Text="Selected runtime" FontWeight="SemiBold" Margin="0,8,0,0" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" Text="{Binding SelectedRuntimeVersion}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="1" Text="Application version" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" Text="{Binding AppVersion}" TextWrapping="Wrap" />
 
-                    <TextBlock Grid.Row="2" Text="Selected provider" FontWeight="SemiBold" Margin="0,8,0,0" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Text="{Binding SelectedProviderName}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="2" Text="Configured project path" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Text="{Binding ExpectedProjectPath}" TextWrapping="Wrap" />
 
-                    <TextBlock Grid.Row="3" Text="Assembly path" FontWeight="SemiBold" Margin="0,8,0,0" />
-                    <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" Text="{Binding SelectedAssemblyPath}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="3" Text="Archive directory" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" Text="{Binding ArchiveOutputDirectory}" TextWrapping="Wrap" />
 
-                    <TextBlock Grid.Row="4" Text="Selection reason" FontWeight="SemiBold" Margin="0,8,0,0" />
-                    <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,8,0,0" Text="{Binding RuntimeSelectionReason}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="4" Text="Detected process version" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,8,0,0" Text="{Binding DetectedProcessVersion}" TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="5" Text="Selected runtime" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="5" Grid.Column="1" Margin="0,8,0,0" Text="{Binding SelectedRuntimeVersion}" TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="6" Text="Selected provider" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="6" Grid.Column="1" Margin="0,8,0,0" Text="{Binding SelectedProviderName}" TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="7" Text="Assembly path" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="7" Grid.Column="1" Margin="0,8,0,0" Text="{Binding SelectedAssemblyPath}" TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="8" Text="Selection reason" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="8" Grid.Column="1" Margin="0,8,0,0" Text="{Binding RuntimeSelectionReason}" TextWrapping="Wrap" />
                 </Grid>
 
                 <ListBox Grid.Row="8" Margin="0,12,0,0" ItemsSource="{Binding History}" />
             </Grid>
         </Border>
 
-        <TextBlock Grid.Row="3" Margin="0,14,0,0" Text="Logs: .\\logs\\automation-launcher-.log" Foreground="#5B6A72" />
+        <Grid Grid.Row="3" Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Text="The main window stays outside the taskbar. Use the tray icon next to the clock for quick actions and settings."
+                       Foreground="#5B6A72"
+                       TextWrapping="Wrap" />
+
+            <Button Grid.Column="1"
+                    Width="100"
+                    Height="32"
+                    Margin="16,0,0,0"
+                    Content="About"
+                    Background="#D9E4EC"
+                    Foreground="#0D1B2A"
+                    BorderBrush="#B9C7D3"
+                    Click="About_Click" />
+        </Grid>
     </Grid>
 </Window>

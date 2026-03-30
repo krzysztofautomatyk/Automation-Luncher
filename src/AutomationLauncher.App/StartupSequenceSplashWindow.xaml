@@ -1,0 +1,65 @@
+<Window x:Class="AutomationLauncher.App.StartupSequenceSplashWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Automation Launcher"
+        Width="900"
+        Height="520"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Background="#0D1B2A">
+    <Grid>
+        <Image x:Name="BackgroundImage"
+               Stretch="UniformToFill"
+               Opacity="0.9" />
+
+        <Border Background="#8C07111B" />
+
+        <Grid Margin="30">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock x:Name="ApplicationTitleText"
+                       HorizontalAlignment="Right"
+                       FontSize="26"
+                       FontWeight="SemiBold"
+                       Foreground="White"
+                       Text="Automation Launcher" />
+
+            <StackPanel Grid.Row="1"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Center"
+                        MaxWidth="640">
+                <TextBlock Text="Windows startup automation"
+                           FontSize="20"
+                           Foreground="#D7E4ED"
+                           HorizontalAlignment="Center" />
+                <TextBlock x:Name="StatusText"
+                           Margin="0,18,0,0"
+                           FontSize="34"
+                           FontWeight="SemiBold"
+                           Foreground="White"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap"
+                           Text="Preparing startup sequence..." />
+            </StackPanel>
+
+            <StackPanel Grid.Row="2"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Center">
+                <Button Width="170"
+                        Height="42"
+                        Content="Cancel startup"
+                        Background="#C44949"
+                        Foreground="White"
+                        BorderBrush="#C44949"
+                        Click="Cancel_Click" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>
