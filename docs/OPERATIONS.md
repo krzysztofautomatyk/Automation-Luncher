@@ -2,7 +2,7 @@
 
 ## Runtime prerequisites
 
-- Windows station with Siemens TIA Portal v19 installed.
+- Windows station with Siemens TIA Portal V15 or newer installed.
 - TIA Openness API enabled with appropriate access rights.
 - Application user must have write access to archive output directory.
 
@@ -10,8 +10,9 @@
 
 1. Verify Archive.ExpectedProjectPath points to the production TIA project path.
 2. Verify Archive.ArchiveOutputDirectory exists and is writable.
-3. Verify Archive.OpennessAssemblyPath points to Siemens.Engineering.dll from TIA v19 PublicAPI folder.
+3. Verify detected runtime or manual runtime selection points to the intended Siemens.Engineering.dll.
 4. Launch application and confirm status panel is reachable.
+5. If validating a specific TIA version, follow [docs/TIA_RUNTIME_VALIDATION_MATRIX.md](docs/TIA_RUNTIME_VALIDATION_MATRIX.md).
 
 ## Normal operation
 

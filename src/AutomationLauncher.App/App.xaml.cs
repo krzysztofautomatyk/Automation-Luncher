@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Threading;
 using AutomationLauncher.Domain.Models;
@@ -32,6 +33,7 @@ public partial class App : System.Windows.Application
                 services.AddSingleton(configuration);
                 services.AddSingleton(settings);
                 services.AddInfrastructure(settings.Archive, Log.Logger);
+                services.AddSingleton<IRuntimeSelectionSettingsStore>(_ => new JsonRuntimeSelectionSettingsStore(GetUserSettingsFilePath()));
                 services.AddSingleton<MainWindowViewModel>();
                 services.AddSingleton<MainWindow>();
             })
@@ -81,6 +83,15 @@ public partial class App : System.Windows.Application
         return new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .AddJsonFile(GetUserSettingsFilePath(), optional: true, reloadOnChange: true)
             .Build();
+    }
+
+    private static string GetUserSettingsFilePath()
+    {
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "AutomationLauncher",
+            "user-settings.json");
     }
 }

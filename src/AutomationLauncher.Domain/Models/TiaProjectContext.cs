@@ -10,7 +10,12 @@ public sealed class TiaProjectContext
         bool? hasUnsavedChanges,
         bool unsavedStateDetectedReliably,
         string? diagnosticCode = null,
-        string? diagnosticMessage = null)
+        string? diagnosticMessage = null,
+        string? tiaVersion = null,
+        string? opennessAssemblyPath = null,
+        string? providerName = null,
+        string? runtimeSelectionReason = null,
+        string? detectedProcessVersion = null)
     {
         IsTiaRunning = isTiaRunning;
         OpenProjectPath = openProjectPath;
@@ -20,6 +25,11 @@ public sealed class TiaProjectContext
         UnsavedStateDetectedReliably = unsavedStateDetectedReliably;
         DiagnosticCode = diagnosticCode;
         DiagnosticMessage = diagnosticMessage;
+        TiaVersion = tiaVersion;
+        OpennessAssemblyPath = opennessAssemblyPath;
+        ProviderName = providerName;
+        RuntimeSelectionReason = runtimeSelectionReason;
+        DetectedProcessVersion = detectedProcessVersion;
     }
 
     public bool IsTiaRunning { get; }
@@ -37,4 +47,14 @@ public sealed class TiaProjectContext
     public string? DiagnosticCode { get; }
 
     public string? DiagnosticMessage { get; }
+
+    public string? TiaVersion { get; }
+
+    public string? OpennessAssemblyPath { get; }
+
+    public string? ProviderName { get; }
+
+    public string? RuntimeSelectionReason { get; }
+
+    public string? DetectedProcessVersion { get; }
 }

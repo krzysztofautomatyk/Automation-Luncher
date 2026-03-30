@@ -21,8 +21,8 @@
 
         <Border Padding="16" Background="#0D1B2A" CornerRadius="12">
             <StackPanel>
-                <TextBlock Text="TIA Portal v19 Project Archiver" Foreground="White" FontSize="24" FontWeight="SemiBold" />
-                <TextBlock Text="Production workflow: verify process, validate project, save if needed, archive and log everything."
+                <TextBlock Text="TIA Portal V15+ Project Archiver" Foreground="White" FontSize="24" FontWeight="SemiBold" />
+                <TextBlock Text="Production workflow: resolve matching Openness runtime, verify process, save if needed, archive and log everything."
                            Foreground="#D8E2EA"
                            Margin="0,8,0,0" />
             </StackPanel>
@@ -40,6 +40,8 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <TextBlock Text="Configured project path" FontWeight="SemiBold" />
@@ -51,7 +53,29 @@
                 <CheckBox Grid.Row="2" Margin="0,14,0,0" Content="Try detect unsaved changes" IsChecked="{Binding TryDetectUnsavedChanges}" />
                 <CheckBox Grid.Row="2" Grid.Column="1" Margin="0,14,0,0" Content="Force save when detection is unavailable" IsChecked="{Binding ForceSaveWhenDetectionUnavailable}" />
 
-                <Button Grid.Row="3"
+                <TextBlock Grid.Row="3" Text="TIA runtime selection mode" FontWeight="SemiBold" Margin="0,16,12,0" />
+                <ComboBox Grid.Row="4"
+                          Margin="0,8,12,0"
+                          Padding="8"
+                          ItemsSource="{Binding TiaRuntimeSelectionModes}"
+                          SelectedItem="{Binding TiaRuntimeSelectionMode, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="Preferred TIA runtime" FontWeight="SemiBold" Margin="0,16,0,0" />
+                <ComboBox Grid.Row="4"
+                          Grid.Column="1"
+                          Margin="0,8,0,0"
+                          Padding="8"
+                          ItemsSource="{Binding AvailableTiaRuntimes}"
+                          SelectedItem="{Binding SelectedTiaRuntime, UpdateSourceTrigger=PropertyChanged}" />
+
+                <TextBlock Grid.Row="5"
+                           Grid.ColumnSpan="2"
+                           Margin="0,10,0,0"
+                           Foreground="#5B6A72"
+                           TextWrapping="Wrap"
+                           Text="{Binding RuntimeCatalogStatus}" />
+
+                <Button Grid.Row="6"
                     Margin="0,16,12,0"
                     Height="38"
                     Content="Sync Project From TIA"
@@ -62,7 +86,7 @@
                     BorderBrush="#5B6A72"
                     Command="{Binding SyncProjectFromTiaCommand}" />
 
-                <Button Grid.Row="3"
+                <Button Grid.Row="6"
                     Grid.Column="1"
                     Margin="0,16,0,0"
                     Height="38"
@@ -74,7 +98,7 @@
                     BorderBrush="#1A6B3A"
                     Command="{Binding CheckTiaConnectionCommand}" />
 
-                <Button Grid.Row="4"
+                <Button Grid.Row="7"
                         Grid.ColumnSpan="2"
                         Margin="0,16,0,0"
                         Height="42"
@@ -93,12 +117,49 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
                 <TextBlock Text="Runtime status" FontSize="18" FontWeight="SemiBold" />
                 <TextBlock Grid.Row="1" Margin="0,10,0,0" Text="{Binding StatusMessage}" TextWrapping="Wrap" />
-                <ListBox Grid.Row="2" Margin="0,12,0,0" ItemsSource="{Binding History}" />
+                <TextBlock Grid.Row="2" Margin="0,10,0,0" Foreground="#5B6A72" Text="{Binding RuntimeDecisionMessage}" TextWrapping="Wrap" />
+
+                <Grid Grid.Row="3" Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="220" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Text="Detected process version" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="1" Text="{Binding DetectedProcessVersion}" TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="1" Text="Selected runtime" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" Text="{Binding SelectedRuntimeVersion}" TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="2" Text="Selected provider" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Text="{Binding SelectedProviderName}" TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="3" Text="Assembly path" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" Text="{Binding SelectedAssemblyPath}" TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="4" Text="Selection reason" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,8,0,0" Text="{Binding RuntimeSelectionReason}" TextWrapping="Wrap" />
+                </Grid>
+
+                <ListBox Grid.Row="8" Margin="0,12,0,0" ItemsSource="{Binding History}" />
             </Grid>
         </Border>
 

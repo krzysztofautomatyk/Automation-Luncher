@@ -44,7 +44,7 @@ public sealed class ArchiveProjectUseCase
 
             if (!context.IsTiaRunning)
             {
-                return new ArchiveResult(ArchiveOutcome.TiaNotRunning, context.DiagnosticMessage ?? "TIA Portal is not running.");
+                return new ArchiveResult(ArchiveOutcome.TiaNotRunning, context.DiagnosticMessage ?? "TIA Portal is not running.", runtimeContext: context);
             }
 
             if (string.IsNullOrWhiteSpace(context.OpenProjectPath) || string.IsNullOrWhiteSpace(context.SessionId))
@@ -53,7 +53,7 @@ public sealed class ArchiveProjectUseCase
                     ? ArchiveOutcome.NoProjectOpen
                     : ArchiveOutcome.TiaConnectionFailed;
 
-                return new ArchiveResult(outcome, context.DiagnosticMessage ?? "TIA Portal is running, but no project is open.");
+                return new ArchiveResult(outcome, context.DiagnosticMessage ?? "TIA Portal is running, but no project is open.", runtimeContext: context);
             }
 
             var openProjectPath = context.OpenProjectPath!;
@@ -63,7 +63,8 @@ public sealed class ArchiveProjectUseCase
             {
                 return new ArchiveResult(
                     ArchiveOutcome.WrongProjectOpen,
-                    $"Different project is open. Expected: {expectedProject}, Actual: {actualProject}");
+                    $"Different project is open. Expected: {expectedProject}, Actual: {actualProject}",
+                    runtimeContext: context);
             }
 
             var shouldSave = DetermineShouldSave(context, options, out var saveReason);
@@ -78,7 +79,7 @@ public sealed class ArchiveProjectUseCase
                 _logger.SaveCompleted(correlationId, saveOk);
                 if (!saveOk)
                 {
-                    return new ArchiveResult(ArchiveOutcome.SaveFailed, "Unable to save project before archive.");
+                    return new ArchiveResult(ArchiveOutcome.SaveFailed, "Unable to save project before archive.", runtimeContext: context);
                 }
             }
 
@@ -103,14 +104,14 @@ public sealed class ArchiveProjectUseCase
                 {
                     var duration = DateTimeOffset.UtcNow - startedAt;
                     _logger.ArchiveCompleted(correlationId, true, archivePath, duration);
-                    return new ArchiveResult(ArchiveOutcome.Success, "Archive completed successfully.", archivePath, duration);
+                    return new ArchiveResult(ArchiveOutcome.Success, "Archive completed successfully.", archivePath, duration, context);
                 }
 
                 if (attempt > options.RetryCount)
                 {
                     var duration = DateTimeOffset.UtcNow - startedAt;
                     _logger.ArchiveCompleted(correlationId, false, archivePath, duration);
-                    return new ArchiveResult(ArchiveOutcome.ArchiveFailed, "Archive failed after retries.", null, duration);
+                    return new ArchiveResult(ArchiveOutcome.ArchiveFailed, "Archive failed after retries.", null, duration, context);
                 }
 
                 await Task.Delay(options.RetryDelayMilliseconds, cancellationToken);

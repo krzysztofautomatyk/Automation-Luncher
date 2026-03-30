@@ -10,5 +10,8 @@ public sealed class ArchiveOptions
     public int ArchiveTimeoutSeconds { get; set; } = 300;
     public int RetryCount { get; set; } = 1;
     public int RetryDelayMilliseconds { get; set; } = 2000;
+    public TiaPortalVersionSelectionMode TiaVersionSelectionMode { get; set; } = TiaPortalVersionSelectionMode.Auto;
+    public string? PreferredTiaVersion { get; set; }
     public string? OpennessAssemblyPath { get; set; }
+    public IList<TiaPortalRuntimeConfiguration> KnownVersions { get; set; } = new List<TiaPortalRuntimeConfiguration>();
 }
