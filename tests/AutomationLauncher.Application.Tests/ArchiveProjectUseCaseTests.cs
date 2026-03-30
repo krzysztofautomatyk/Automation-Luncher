@@ -1,0 +1,153 @@
+using AutomationLauncher.Application.UseCases;
+using AutomationLauncher.Domain.Contracts;
+using AutomationLauncher.Domain.Models;
+using Xunit;
+
+namespace AutomationLauncher.Application.Tests;
+
+public sealed class ArchiveProjectUseCaseTests
+{
+    [Fact]
+    public async Task ReturnsTiaNotRunning_WhenPortalMissing()
+    {
+        var useCase = BuildUseCase(new FakeGateway(new TiaProjectContext(false, null, null, null, null, false, "TiaNotRunning", "TIA Portal process was not found.")));
+
+        var result = await useCase.ExecuteAsync(DefaultOptions(), CancellationToken.None);
+
+        Assert.Equal(ArchiveOutcome.TiaNotRunning, result.Outcome);
+    }
+
+    [Fact]
+    public async Task ReturnsConnectionFailure_WhenDiagnosticsReportOpennessIssue()
+    {
+        var context = new TiaProjectContext(true, null, null, "101", null, false, "GetProcessesFailed", "Failed to load Siemens Openness dependency.");
+        var useCase = BuildUseCase(new FakeGateway(context));
+
+        var result = await useCase.ExecuteAsync(DefaultOptions(), CancellationToken.None);
+
+        Assert.Equal(ArchiveOutcome.TiaConnectionFailed, result.Outcome);
+        Assert.Equal("Failed to load Siemens Openness dependency.", result.Message);
+    }
+
+    [Fact]
+    public async Task ReturnsWrongProject_WhenOpenProjectDoesNotMatchConfiguredPath()
+    {
+        var context = new TiaProjectContext(true, @"C:\Projects\Other.ap19", "Other", "101", false, true);
+        var useCase = BuildUseCase(new FakeGateway(context));
+
+        var result = await useCase.ExecuteAsync(DefaultOptions(), CancellationToken.None);
+
+        Assert.Equal(ArchiveOutcome.WrongProjectOpen, result.Outcome);
+    }
+
+    [Fact]
+    public async Task ReturnsSuccess_WhenSaveAndArchiveSucceed()
+    {
+        var context = new TiaProjectContext(true, @"C:\Projects\Target.ap19", "Target", "101", true, true);
+        var gateway = new FakeGateway(context) { SaveResult = true, ArchiveResult = true };
+        var useCase = BuildUseCase(gateway);
+
+        var result = await useCase.ExecuteAsync(DefaultOptions(), CancellationToken.None);
+
+        Assert.Equal(ArchiveOutcome.Success, result.Outcome);
+        Assert.NotNull(result.ArchivePath);
+        Assert.True(gateway.SaveCalled);
+        Assert.True(gateway.ArchiveCalled);
+    }
+
+    private static ArchiveProjectUseCase BuildUseCase(FakeGateway gateway)
+    {
+        return new ArchiveProjectUseCase(gateway, new FakePathService(), new FakeOperationLogger());
+    }
+
+    private static ArchiveOptions DefaultOptions()
+    {
+        return new ArchiveOptions
+        {
+            ExpectedProjectPath = @"C:\Projects\Target.ap19",
+            ArchiveOutputDirectory = @"C:\Archive",
+            TryDetectUnsavedChanges = true,
+            ForceSaveWhenDetectionUnavailable = true,
+            SaveTimeoutSeconds = 10,
+            ArchiveTimeoutSeconds = 10,
+            RetryCount = 0,
+            RetryDelayMilliseconds = 1
+        };
+    }
+
+    private sealed class FakeGateway : ITiaPortalGateway
+    {
+        private readonly TiaProjectContext _context;
+
+        public FakeGateway(TiaProjectContext context)
+        {
+            _context = context;
+        }
+
+        public bool SaveResult { get; set; } = true;
+        public bool ArchiveResult { get; set; } = true;
+        public bool SaveCalled { get; private set; }
+        public bool ArchiveCalled { get; private set; }
+
+        public Task<TiaProjectContext> GetCurrentContextAsync(CancellationToken cancellationToken) => Task.FromResult(_context);
+
+        public Task<bool> SaveProjectAsync(string sessionId, TimeSpan timeout, CancellationToken cancellationToken)
+        {
+            SaveCalled = true;
+            return Task.FromResult(SaveResult);
+        }
+
+        public Task<bool> ArchiveProjectAsync(string sessionId, string destinationArchivePath, TimeSpan timeout, CancellationToken cancellationToken)
+        {
+            ArchiveCalled = true;
+            return Task.FromResult(ArchiveResult);
+        }
+    }
+
+    private sealed class FakePathService : IPathService
+    {
+        public string NormalizePath(string path) => path.Trim().Replace('/', '\\');
+
+        public string BuildArchiveFilePath(string projectPath, string outputDirectory, DateTimeOffset timestamp)
+            => $"{outputDirectory}\\Target_{timestamp:yyyyMMdd_HHmmss}.zap19";
+
+        public void EnsureDirectoryExists(string path)
+        {
+        }
+    }
+
+    private sealed class FakeOperationLogger : IOperationLogger
+    {
+        public void ArchiveStarted(string correlationId, string expectedProjectPath, string outputDirectory)
+        {
+        }
+
+        public void TiaContextRead(string correlationId, TiaProjectContext context)
+        {
+        }
+
+        public void TiaDiagnostic(string correlationId, string diagnosticCode, string message)
+        {
+        }
+
+        public void SaveAttempted(string correlationId, bool shouldSave, string reason)
+        {
+        }
+
+        public void SaveCompleted(string correlationId, bool success)
+        {
+        }
+
+        public void ArchiveAttempted(string correlationId, string archivePath, int attempt)
+        {
+        }
+
+        public void ArchiveCompleted(string correlationId, bool success, string? archivePath, TimeSpan duration)
+        {
+        }
+
+        public void Failed(string correlationId, string stage, string message, Exception? exception = null)
+        {
+        }
+    }
+}
