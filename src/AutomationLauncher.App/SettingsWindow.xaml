@@ -168,7 +168,11 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <TextBlock Text="Windows startup automation" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Grid.ColumnSpan="3"
+                               Text="Windows startup automation"
+                               FontSize="28"
+                               FontWeight="Bold"
+                               Foreground="#0D1B2A" />
 
                     <CheckBox Grid.Row="1"
                               Grid.ColumnSpan="3"
@@ -186,7 +190,8 @@
                     <TextBlock Grid.Row="3"
                                Grid.ColumnSpan="3"
                                Margin="0,12,0,0"
-                               Foreground="#5B6A72"
+                               Foreground="#2F4456"
+                               FontWeight="SemiBold"
                                TextWrapping="Wrap"
                                Text="The splash screen stays on top, shows the current startup action, supports a custom background image, and allows the user to cancel the sequence." />
 
@@ -204,6 +209,9 @@
                                   SelectedItem="{Binding SelectedStartupSequenceEntry}"
                                   GridLinesVisibility="Horizontal">
                             <DataGrid.Columns>
+                                <DataGridTextColumn Header="Alias"
+                                                    Binding="{Binding Alias, UpdateSourceTrigger=PropertyChanged}"
+                                                    Width="200" />
                                 <DataGridTextColumn Header="Application path"
                                                     Binding="{Binding ExecutablePath, UpdateSourceTrigger=PropertyChanged}"
                                                     Width="*" />

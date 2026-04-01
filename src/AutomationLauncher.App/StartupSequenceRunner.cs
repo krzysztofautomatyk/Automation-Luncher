@@ -8,7 +8,8 @@ public sealed class StartupSequenceRunner : IStartupSequenceRunner
     public async Task<StartupSequenceRunResult> RunAsync(
         IReadOnlyList<StartupSequenceEntry> entries,
         StartupSequenceSplashWindow splashWindow,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<Process>? onProcessStarted = null)
     {
         var startedCount = 0;
         var failedCount = 0;
@@ -24,7 +25,9 @@ public sealed class StartupSequenceRunner : IStartupSequenceRunner
                 continue;
             }
 
-            var displayName = Path.GetFileName(executablePath);
+            var displayName = string.IsNullOrWhiteSpace(entry.Alias)
+                ? Path.GetFileName(executablePath)
+                : entry.Alias.Trim();
             var delaySeconds = Math.Max(0, entry.DelaySeconds);
             for (var remaining = delaySeconds; remaining > 0; remaining--)
             {
@@ -45,12 +48,17 @@ public sealed class StartupSequenceRunner : IStartupSequenceRunner
 
             try
             {
-                Process.Start(new ProcessStartInfo
+                var process = Process.Start(new ProcessStartInfo
                 {
                     FileName = executablePath,
                     UseShellExecute = true,
                     WorkingDirectory = Path.GetDirectoryName(executablePath) ?? Environment.CurrentDirectory
                 });
+
+                if (process is not null)
+                {
+                    onProcessStarted?.Invoke(process);
+                }
 
                 startedCount++;
                 await Task.Delay(800, cancellationToken);

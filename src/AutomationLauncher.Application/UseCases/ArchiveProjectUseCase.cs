@@ -1,5 +1,7 @@
 using AutomationLauncher.Domain.Contracts;
 using AutomationLauncher.Domain.Models;
+using System.Globalization;
+using System.Text;
 
 namespace AutomationLauncher.Application.UseCases;
 
@@ -21,6 +23,7 @@ public sealed class ArchiveProjectUseCase
 
     public async Task<ArchiveResult> ExecuteAsync(ArchiveOptions options, CancellationToken cancellationToken)
     {
+        var startedAtLocal = DateTimeOffset.Now;
         var startedAt = DateTimeOffset.UtcNow;
         var correlationId = Guid.NewGuid().ToString("N");
 
@@ -67,6 +70,8 @@ public sealed class ArchiveProjectUseCase
                     runtimeContext: context);
             }
 
+                    var projectSizeBytes = TryGetPathSizeBytes(actualProject);
+
             var shouldSave = DetermineShouldSave(context, options, out var saveReason);
             _logger.SaveAttempted(correlationId, shouldSave, saveReason);
             if (shouldSave)
@@ -102,8 +107,18 @@ public sealed class ArchiveProjectUseCase
 
                 if (archiveOk)
                 {
+                    var finishedAtLocal = DateTimeOffset.Now;
                     var duration = DateTimeOffset.UtcNow - startedAt;
                     _logger.ArchiveCompleted(correlationId, true, archivePath, duration);
+                    TryWriteArchiveMetricsLog(
+                        archivePath,
+                        correlationId,
+                        startedAtLocal,
+                        finishedAtLocal,
+                        actualProject,
+                        projectSizeBytes,
+                        TryGetPathSizeBytes(archivePath),
+                        duration);
                     return new ArchiveResult(ArchiveOutcome.Success, "Archive completed successfully.", archivePath, duration, context);
                 }
 
@@ -161,5 +176,100 @@ public sealed class ArchiveProjectUseCase
         return !string.IsNullOrWhiteSpace(expectedNoExt)
             && !string.IsNullOrWhiteSpace(actualNoExt)
             && string.Equals(expectedNoExt, actualNoExt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static long? TryGetPathSizeBytes(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                return new FileInfo(path).Length;
+            }
+
+            if (!Directory.Exists(path))
+            {
+                return null;
+            }
+
+            return Directory
+                .EnumerateFiles(path, "*", SearchOption.AllDirectories)
+                .Sum(filePath =>
+                {
+                    try
+                    {
+                        return new FileInfo(filePath).Length;
+                    }
+                    catch
+                    {
+                        return 0L;
+                    }
+                });
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void TryWriteArchiveMetricsLog(
+        string archivePath,
+        string correlationId,
+        DateTimeOffset startedAt,
+        DateTimeOffset finishedAt,
+        string projectPath,
+        long? projectSizeBytes,
+        long? archiveSizeBytes,
+        TimeSpan duration)
+    {
+        try
+        {
+            var outputDirectory = Path.GetDirectoryName(archivePath);
+            if (string.IsNullOrWhiteSpace(outputDirectory))
+            {
+                return;
+            }
+
+            Directory.CreateDirectory(outputDirectory);
+            var archiveBaseName = Path.GetFileNameWithoutExtension(archivePath);
+            var metricsLogPath = Path.Combine(outputDirectory, $"{archiveBaseName}.archive.log");
+            var content = new StringBuilder()
+                .AppendLine("Archive Metrics")
+                .AppendLine($"CorrelationId={correlationId}")
+                .AppendLine($"StartedAt={startedAt:O}")
+                .AppendLine($"ProjectPath={projectPath}")
+                .AppendLine($"ProjectSizeBytes={FormatBytesValue(projectSizeBytes)}")
+                .AppendLine($"ProjectSizeMB={FormatMegabytesValue(projectSizeBytes)}")
+                .AppendLine($"FinishedAt={finishedAt:O}")
+                .AppendLine($"ArchivePath={archivePath}")
+                .AppendLine($"ArchiveSizeBytes={FormatBytesValue(archiveSizeBytes)}")
+                .AppendLine($"ArchiveSizeMB={FormatMegabytesValue(archiveSizeBytes)}")
+                .AppendLine($"DurationMs={duration.TotalMilliseconds.ToString("F0", CultureInfo.InvariantCulture)}")
+                .ToString();
+
+            File.WriteAllText(metricsLogPath, content);
+        }
+        catch
+        {
+            // Metrics log generation must not fail the archive workflow.
+        }
+    }
+
+    private static string FormatBytesValue(long? bytes)
+    {
+        return bytes.HasValue
+            ? bytes.Value.ToString(CultureInfo.InvariantCulture)
+            : "N/A";
+    }
+
+    private static string FormatMegabytesValue(long? bytes)
+    {
+        if (!bytes.HasValue)
+        {
+            return "N/A";
+        }
+
+        var megabytes = bytes.Value / (1024d * 1024d);
+        return megabytes.ToString("F2", CultureInfo.InvariantCulture);
     }
 }

@@ -9,7 +9,8 @@
         WindowStartupLocation="CenterScreen"
         ShowInTaskbar="False"
         Topmost="True"
-        Background="#0D1B2A">
+        Background="#0D1B2A"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown">
     <Grid>
         <Image x:Name="BackgroundImage"
                Stretch="UniformToFill"
@@ -52,8 +53,19 @@
             <StackPanel Grid.Row="2"
                         Orientation="Horizontal"
                         HorizontalAlignment="Center">
+                <Button x:Name="ConfirmActionButton"
+                    Width="170"
+                    Height="42"
+                    Margin="0,0,12,0"
+                    Content="Confirm"
+                    Background="#2E8B57"
+                    Foreground="White"
+                    BorderBrush="#2E8B57"
+                    Visibility="Collapsed"
+                    Click="Confirm_Click" />
                 <Button Width="170"
                         Height="42"
+                    x:Name="CancelActionButton"
                         Content="Cancel startup"
                         Background="#C44949"
                         Foreground="White"

@@ -206,6 +206,7 @@ public sealed class ProtectedApplicationSettingsStore : IProtectedApplicationSet
             .Where(entry => entry is not null)
             .Select(entry => new StartupSequenceEntry
             {
+                Alias = entry.Alias?.Trim() ?? string.Empty,
                 ExecutablePath = entry.ExecutablePath?.Trim() ?? string.Empty,
                 DelaySeconds = Math.Max(0, entry.DelaySeconds)
             })

@@ -1,0 +1,50 @@
+<Window x:Class="AutomationLauncher.App.CancellationReasonDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="520"
+        Height="290"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="#0F1E2D"
+        Foreground="White"
+        Title="Cancel operation">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="PromptText"
+                   FontSize="15"
+                   TextWrapping="Wrap"
+                   Text="Provide cancellation reason:" />
+
+        <TextBox x:Name="ReasonTextBox"
+                 Grid.Row="1"
+                 Margin="0,12,0,12"
+                 VerticalContentAlignment="Top"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap"
+                 MinLines="5"
+                 MaxLength="500"
+                 TextChanged="ReasonTextBox_TextChanged" />
+
+        <StackPanel Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+            <Button Width="110"
+                    Height="34"
+                    Margin="0,0,8,0"
+                    Content="Back"
+                    Click="Back_Click" />
+            <Button x:Name="ConfirmButton"
+                    Width="150"
+                    Height="34"
+                    IsEnabled="False"
+                    Content="Confirm cancel"
+                    Click="ConfirmCancel_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

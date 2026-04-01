@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -9,5 +10,6 @@ public interface IStartupSequenceRunner
     Task<StartupSequenceRunResult> RunAsync(
         IReadOnlyList<StartupSequenceEntry> entries,
         StartupSequenceSplashWindow splashWindow,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        Action<Process>? onProcessStarted = null);
 }

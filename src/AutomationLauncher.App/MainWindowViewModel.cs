@@ -27,6 +27,8 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly IAutostartService _autostartService;
     private readonly AutomationLauncherSettings _settings;
     private readonly DispatcherTimer _sessionCountdownTimer;
+    private readonly DispatcherTimer _fileLogRefreshTimer;
+    private string _lastLogSnapshotKey = string.Empty;
     private bool _isInitializing = true;
 
     [ObservableProperty]
@@ -75,6 +77,15 @@ public partial class MainWindowViewModel : ObservableObject
     private bool isBusy;
 
     [ObservableProperty]
+    private bool isSessionAuthenticated;
+
+    [ObservableProperty]
+    private bool isStartupAutomationRunning;
+
+    [ObservableProperty]
+    private HostControlState currentHostControlState = HostControlState.Ready;
+
+    [ObservableProperty]
     private string hostName = Environment.MachineName;
 
     [ObservableProperty]
@@ -96,6 +107,9 @@ public partial class MainWindowViewModel : ObservableObject
     private string startupFolderPath = string.Empty;
 
     [ObservableProperty]
+    private string controlFilesFolderPath = AppContext.BaseDirectory;
+
+    [ObservableProperty]
     private string startupSplashBackgroundImagePath = string.Empty;
 
     [ObservableProperty]
@@ -114,6 +128,7 @@ public partial class MainWindowViewModel : ObservableObject
     private StartupSequenceEntry? selectedStartupSequenceEntry;
 
     public ObservableCollection<string> History { get; } = new();
+    public ObservableCollection<string> FileLogs { get; } = new();
 
     public ObservableCollection<string> TiaRuntimeSelectionModes { get; } = new()
     {
@@ -134,6 +149,8 @@ public partial class MainWindowViewModel : ObservableObject
         "Error",
         "Fatal"
     };
+
+    public event EventHandler<ArchiveWorkflowStateChangedEventArgs>? ArchiveWorkflowStateChanged;
 
     public MainWindowViewModel(
         ArchiveProjectUseCase archiveProjectUseCase,
@@ -162,11 +179,13 @@ public partial class MainWindowViewModel : ObservableObject
         LaunchOnWindowsStartup = _settings.Startup.RunOnWindowsStartup;
         RunStartupSequenceOnWindowsStartup = _settings.Startup.RunSequenceOnWindowsStartup;
         StartupFolderPath = _autostartService.GetStartupFolderPath();
+        ControlFilesFolderPath = AppContext.BaseDirectory;
         StartupSplashBackgroundImagePath = _settings.Startup.SplashBackgroundImagePath;
         LogDirectory = _settings.Logging.DirectoryPath;
         LogMinimumLevel = _settings.Logging.MinimumLevel;
         LogRetentionFileCount = _settings.Logging.RetainedFileCountLimit;
         SettingsFilePath = _protectedSettingsStore.SettingsFilePath;
+        IsSessionAuthenticated = _sessionCoordinator.IsAuthenticated;
 
         LoadRuntimeCatalog();
         LoadStartupSequenceEntries();
@@ -179,8 +198,49 @@ public partial class MainWindowViewModel : ObservableObject
         };
         _sessionCountdownTimer.Tick += HandleSessionCountdownTick;
         _sessionCountdownTimer.Start();
+
+        _fileLogRefreshTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(2)
+        };
+        _fileLogRefreshTimer.Tick += HandleFileLogRefreshTick;
+        _fileLogRefreshTimer.Start();
+
+        RefreshFileLogs(forceRefresh: true);
         UpdateSessionCountdown();
     }
+
+    public bool CanUseProtectedActions => IsSessionAuthenticated && !IsBusy;
+
+    public bool CanUseProtectedUtilities => IsSessionAuthenticated;
+
+    public bool CanLoginSession => !IsSessionAuthenticated;
+
+    public bool CanRunStartupAutomationManually => IsSessionAuthenticated
+        && !IsStartupAutomationRunning
+        && CurrentHostControlState != HostControlState.Running
+        && CurrentHostControlState != HostControlState.Stopping;
+
+    public bool CanStopManagedApplications => IsSessionAuthenticated
+        && (CurrentHostControlState == HostControlState.Running || IsStartupAutomationRunning);
+
+    public string HostControlStateDisplay => CurrentHostControlState.ToString();
+
+    public string HostRunFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.run");
+
+    public string HostReadyFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.ready");
+
+    public string HostStoppingFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.stopping");
+
+    public string HostErrorFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.error");
+
+    public string HostStartFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.start");
+
+    public string HostStopFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.stop");
+
+    public string HostMakeArchiveFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.makearchive");
+
+    public string HostArchiveCreatedFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.archivecreated");
 
     [RelayCommand(CanExecute = nameof(CanArchive))]
     private async Task SyncProjectFromTiaAsync()
@@ -285,6 +345,12 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanArchive))]
     private async Task ArchiveAsync()
     {
+        await RunArchiveWorkflowAsync();
+    }
+
+    private async Task<bool> RunArchiveWorkflowAsync()
+    {
+        ArchiveWorkflowStateChanged?.Invoke(this, new ArchiveWorkflowStateChangedEventArgs(true));
         IsBusy = true;
         StatusMessage = "Running archive workflow...";
         ArchiveCommand.NotifyCanExecuteChanged();
@@ -322,12 +388,14 @@ public partial class MainWindowViewModel : ObservableObject
 
             AddHistory(result.Outcome == ArchiveOutcome.Success ? "OK" : "WARN", result.Outcome.ToString(), summary);
             StatusMessage = result.Message;
+            return result.Outcome == ArchiveOutcome.Success;
         }
         catch (Exception ex)
         {
             Log.Logger.Error(ex, "Archive command failed");
             StatusMessage = ex.Message;
             AddHistory("ERROR", "ArchiveFailed", ex.Message);
+            return false;
         }
         finally
         {
@@ -335,6 +403,7 @@ public partial class MainWindowViewModel : ObservableObject
             ArchiveCommand.NotifyCanExecuteChanged();
             SyncProjectFromTiaCommand.NotifyCanExecuteChanged();
             CheckTiaConnectionCommand.NotifyCanExecuteChanged();
+            ArchiveWorkflowStateChanged?.Invoke(this, new ArchiveWorkflowStateChangedEventArgs(false));
         }
     }
 
@@ -396,6 +465,12 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void OpenControlFilesFolder()
+    {
+        OpenPath(ControlFilesFolderPath);
+    }
+
+    [RelayCommand]
     private void AddStartupSequenceEntry()
     {
         if (!EnsureAuthenticated())
@@ -416,6 +491,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         var entry = new StartupSequenceEntry
         {
+            Alias = Path.GetFileNameWithoutExtension(dialog.FileName) ?? string.Empty,
             ExecutablePath = dialog.FileName,
             DelaySeconds = 0
         };
@@ -555,7 +631,65 @@ public partial class MainWindowViewModel : ObservableObject
 
     private bool CanArchive()
     {
-        return !IsBusy;
+        return !IsBusy && IsSessionAuthenticated;
+    }
+
+    partial void OnIsBusyChanged(bool value)
+    {
+        ArchiveCommand.NotifyCanExecuteChanged();
+        SyncProjectFromTiaCommand.NotifyCanExecuteChanged();
+        CheckTiaConnectionCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanUseProtectedActions));
+        OnPropertyChanged(nameof(CanRunStartupAutomationManually));
+    }
+
+    partial void OnIsSessionAuthenticatedChanged(bool value)
+    {
+        ArchiveCommand.NotifyCanExecuteChanged();
+        SyncProjectFromTiaCommand.NotifyCanExecuteChanged();
+        CheckTiaConnectionCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanUseProtectedActions));
+        OnPropertyChanged(nameof(CanUseProtectedUtilities));
+        OnPropertyChanged(nameof(CanLoginSession));
+        OnPropertyChanged(nameof(CanRunStartupAutomationManually));
+        OnPropertyChanged(nameof(CanStopManagedApplications));
+    }
+
+    partial void OnIsStartupAutomationRunningChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanRunStartupAutomationManually));
+        OnPropertyChanged(nameof(CanStopManagedApplications));
+    }
+
+    partial void OnCurrentHostControlStateChanged(HostControlState value)
+    {
+        OnPropertyChanged(nameof(CanRunStartupAutomationManually));
+        OnPropertyChanged(nameof(CanStopManagedApplications));
+        OnPropertyChanged(nameof(HostControlStateDisplay));
+    }
+
+    partial void OnHostNameChanged(string value)
+    {
+        OnPropertyChanged(nameof(HostRunFilePath));
+        OnPropertyChanged(nameof(HostReadyFilePath));
+        OnPropertyChanged(nameof(HostStoppingFilePath));
+        OnPropertyChanged(nameof(HostErrorFilePath));
+        OnPropertyChanged(nameof(HostStartFilePath));
+        OnPropertyChanged(nameof(HostStopFilePath));
+        OnPropertyChanged(nameof(HostMakeArchiveFilePath));
+        OnPropertyChanged(nameof(HostArchiveCreatedFilePath));
+    }
+
+    partial void OnControlFilesFolderPathChanged(string value)
+    {
+        OnPropertyChanged(nameof(HostRunFilePath));
+        OnPropertyChanged(nameof(HostReadyFilePath));
+        OnPropertyChanged(nameof(HostStoppingFilePath));
+        OnPropertyChanged(nameof(HostErrorFilePath));
+        OnPropertyChanged(nameof(HostStartFilePath));
+        OnPropertyChanged(nameof(HostStopFilePath));
+        OnPropertyChanged(nameof(HostMakeArchiveFilePath));
+        OnPropertyChanged(nameof(HostArchiveCreatedFilePath));
     }
 
     partial void OnExpectedProjectPathChanged(string value)
@@ -681,6 +815,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         PersistSettings("Log directory updated.", loggingChangeRequiresRestart: true);
+        RefreshFileLogs(forceRefresh: true);
     }
 
     partial void OnLogMinimumLevelChanged(string value)
@@ -869,6 +1004,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (e.IsAuthenticated)
         {
+            IsSessionAuthenticated = true;
             ReloadFromSettings();
             SettingsStatusMessage = e.Message;
             StatusMessage = "Ready";
@@ -876,6 +1012,7 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
+        IsSessionAuthenticated = false;
         SettingsStatusMessage = e.Message;
         RuntimeDecisionMessage = "Settings are locked. Open Settings to unlock and edit configuration.";
         UpdateSessionCountdown();
@@ -965,6 +1102,11 @@ public partial class MainWindowViewModel : ObservableObject
         UpdateSessionCountdown();
     }
 
+    private void HandleFileLogRefreshTick(object? sender, EventArgs e)
+    {
+        RefreshFileLogs();
+    }
+
     private void UpdateSessionCountdown()
     {
         if (!_sessionCoordinator.IsAuthenticated)
@@ -975,5 +1117,119 @@ public partial class MainWindowViewModel : ObservableObject
 
         var remaining = _sessionCoordinator.GetRemainingInactivity();
         SessionTimeRemaining = $"{Math.Max(0, (int)remaining.TotalMinutes):00}:{remaining.Seconds:00}";
+    }
+
+    private void RefreshFileLogs(bool forceRefresh = false)
+    {
+        var logDirectoryPath = ResolveEffectiveLogDirectory();
+        if (!Directory.Exists(logDirectoryPath))
+        {
+            if (FileLogs.Count > 0)
+            {
+                FileLogs.Clear();
+            }
+
+            _lastLogSnapshotKey = string.Empty;
+            return;
+        }
+
+        var logFiles = Directory.GetFiles(logDirectoryPath, "automation-launcher-*.log");
+        Array.Sort(logFiles, StringComparer.OrdinalIgnoreCase);
+
+        var snapshotParts = new List<string>(logFiles.Length);
+        foreach (var logFile in logFiles)
+        {
+            try
+            {
+                var info = new FileInfo(logFile);
+                snapshotParts.Add($"{info.Name}:{info.Length}:{info.LastWriteTimeUtc.Ticks}");
+            }
+            catch
+            {
+                snapshotParts.Add(logFile);
+            }
+        }
+
+        var snapshotKey = string.Join("|", snapshotParts);
+        if (!forceRefresh && string.Equals(snapshotKey, _lastLogSnapshotKey, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastLogSnapshotKey = snapshotKey;
+
+        var logLines = new List<string>();
+        foreach (var logFile in logFiles)
+        {
+            try
+            {
+                logLines.AddRange(File.ReadLines(logFile));
+            }
+            catch
+            {
+                // Ignore transient file-read issues and keep already collected log lines.
+            }
+        }
+
+        FileLogs.Clear();
+        foreach (var logLine in logLines)
+        {
+            FileLogs.Add(logLine);
+        }
+    }
+
+    private string ResolveEffectiveLogDirectory()
+    {
+        var configuredPath = string.IsNullOrWhiteSpace(LogDirectory)
+            ? "logs"
+            : LogDirectory;
+
+        var preferredDirectory = LogPathHelper.ResolveDirectory(configuredPath);
+        try
+        {
+            Directory.CreateDirectory(preferredDirectory);
+            return preferredDirectory;
+        }
+        catch
+        {
+            var fallbackDirectory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "AutomationLauncher",
+                "logs");
+            Directory.CreateDirectory(fallbackDirectory);
+            return fallbackDirectory;
+        }
+    }
+
+    public void SetStartupAutomationRunning(bool isRunning)
+    {
+        IsStartupAutomationRunning = isRunning;
+    }
+
+    public void SetHostControlState(HostControlState state)
+    {
+        CurrentHostControlState = state;
+    }
+
+    public async Task RunArchiveFromControlFileAsync()
+    {
+        if (IsBusy)
+        {
+            AddHistory("INFO", "ArchiveCommandIgnored", "Archive command ignored because the launcher is already busy.");
+            return;
+        }
+
+        await RunArchiveWorkflowAsync();
+    }
+
+    public async Task<bool> RunArchiveFromControlFileWithResultAsync()
+    {
+        if (IsBusy)
+        {
+            AddHistory("INFO", "ArchiveCommandIgnored", "Archive command ignored because the launcher is already busy.");
+            return false;
+        }
+
+        return await RunArchiveWorkflowAsync();
     }
 }

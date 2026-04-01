@@ -43,6 +43,9 @@ public sealed class UiSettings
 public partial class StartupSequenceEntry : ObservableObject
 {
     [ObservableProperty]
+    private string alias = string.Empty;
+
+    [ObservableProperty]
     private string executablePath = string.Empty;
 
     [ObservableProperty]
@@ -52,6 +55,7 @@ public partial class StartupSequenceEntry : ObservableObject
     {
         return new StartupSequenceEntry
         {
+            Alias = Alias,
             ExecutablePath = ExecutablePath,
             DelaySeconds = DelaySeconds
         };

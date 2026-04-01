@@ -53,3 +53,4 @@ Logs are written to:
 - For full TIA integration, Siemens Openness API assembly path must be configured and accessible.
 - TIA Openness security permissions must be enabled on target engineering station.
 - If the password is lost, protected settings cannot be decrypted and must be recreated manually.
+- Host control-file flow is documented in [docs/HOST_CONTROL_FLOW.md](docs/HOST_CONTROL_FLOW.md).

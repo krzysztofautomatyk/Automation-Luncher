@@ -62,4 +62,44 @@ public partial class MainWindow : Window
             app.OpenAboutFromDashboard();
         }
     }
+
+    private async void RunStartupAutomation_Click(object sender, RoutedEventArgs e)
+    {
+        if (System.Windows.Application.Current is App app)
+        {
+            await app.RunStartupAutomationFromDashboardAsync();
+        }
+    }
+
+    private void Exit_Click(object sender, RoutedEventArgs e)
+    {
+        if (System.Windows.Application.Current is App app)
+        {
+            app.ExitFromDashboard();
+        }
+    }
+
+    private void Login_Click(object sender, RoutedEventArgs e)
+    {
+        if (System.Windows.Application.Current is App app)
+        {
+            app.LoginFromDashboard();
+        }
+    }
+
+    private async void RunManagedApplications_Click(object sender, RoutedEventArgs e)
+    {
+        if (System.Windows.Application.Current is App app)
+        {
+            await app.RunManagedApplicationsFromMenuAsync();
+        }
+    }
+
+    private async void StopManagedApplications_Click(object sender, RoutedEventArgs e)
+    {
+        if (System.Windows.Application.Current is App app)
+        {
+            await app.StopManagedApplicationsFromMenuAsync();
+        }
+    }
 }
