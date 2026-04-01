@@ -2,6 +2,7 @@ using AutomationLauncher.Domain.Contracts;
 using AutomationLauncher.Domain.Models;
 using System.Globalization;
 using System.Text;
+using System.Linq;
 
 namespace AutomationLauncher.Application.UseCases;
 
@@ -88,10 +89,16 @@ public sealed class ArchiveProjectUseCase
                 }
             }
 
-            var archivePath = _pathService.BuildArchiveFilePath(
-                openProjectPath,
-                options.ArchiveOutputDirectory,
-                DateTimeOffset.Now);
+            var archiveIdentity = BuildArchiveIdentity();
+            var archivePath = BuildArchiveDestinationPath(options, openProjectPath, archiveIdentity, DateTimeOffset.Now);
+            var oldArchivePath = options.BackupFlow == ArchiveBackupFlow.StableFileWithOld
+                ? _pathService.BuildArchiveFilePath(openProjectPath, options.ArchiveOutputDirectory, archiveIdentity + "_old")
+                : null;
+
+            if (options.BackupFlow == ArchiveBackupFlow.StableFileWithOld && oldArchivePath is not null)
+            {
+                PrepareStableBackupTarget(archivePath, oldArchivePath);
+            }
 
             var attempt = 0;
             while (true)
@@ -109,6 +116,7 @@ public sealed class ArchiveProjectUseCase
                 {
                     var finishedAtLocal = DateTimeOffset.Now;
                     var duration = DateTimeOffset.UtcNow - startedAt;
+                    FinalizeSuccessfulBackup(options, archivePath, oldArchivePath, archiveIdentity);
                     _logger.ArchiveCompleted(correlationId, true, archivePath, duration);
                     TryWriteArchiveMetricsLog(
                         archivePath,
@@ -271,5 +279,83 @@ public sealed class ArchiveProjectUseCase
 
         var megabytes = bytes.Value / (1024d * 1024d);
         return megabytes.ToString("F2", CultureInfo.InvariantCulture);
+    }
+
+    private static string BuildArchiveIdentity()
+    {
+        return Environment.MachineName + "_automaticBackup";
+    }
+
+    private string BuildArchiveDestinationPath(ArchiveOptions options, string projectPath, string archiveIdentity, DateTimeOffset timestamp)
+    {
+        return options.BackupFlow == ArchiveBackupFlow.StableFileWithOld
+            ? _pathService.BuildArchiveFilePath(projectPath, options.ArchiveOutputDirectory, archiveIdentity)
+            : _pathService.BuildArchiveFilePath(projectPath, options.ArchiveOutputDirectory, $"{archiveIdentity}_{timestamp:yyyyMMdd_HHmmss}");
+    }
+
+    private static void PrepareStableBackupTarget(string archivePath, string oldArchivePath)
+    {
+        if (File.Exists(oldArchivePath))
+        {
+            File.Delete(oldArchivePath);
+        }
+
+        if (File.Exists(archivePath))
+        {
+            File.Move(archivePath, oldArchivePath);
+        }
+    }
+
+    private void FinalizeSuccessfulBackup(ArchiveOptions options, string archivePath, string? oldArchivePath, string archiveIdentity)
+    {
+        if (options.BackupFlow == ArchiveBackupFlow.StableFileWithOld)
+        {
+            if (!string.IsNullOrWhiteSpace(oldArchivePath) && File.Exists(oldArchivePath))
+            {
+                try
+                {
+                    File.Delete(oldArchivePath);
+                }
+                catch
+                {
+                    // Old backup cleanup should not fail a successful archive.
+                }
+            }
+
+            return;
+        }
+
+        CleanupOldSuccessfulBackups(archivePath, archiveIdentity, options.SuccessfulBackupRetentionCount);
+    }
+
+    private static void CleanupOldSuccessfulBackups(string currentArchivePath, string archiveIdentity, int retentionCount)
+    {
+        if (retentionCount <= 0)
+        {
+            return;
+        }
+
+        var directoryPath = Path.GetDirectoryName(currentArchivePath);
+        if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
+        {
+            return;
+        }
+
+        var matchingFiles = Directory
+            .EnumerateFiles(directoryPath, archiveIdentity + "_*.zap*", SearchOption.TopDirectoryOnly)
+            .OrderByDescending(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var obsoleteFile in matchingFiles.Skip(retentionCount))
+        {
+            try
+            {
+                File.Delete(obsoleteFile);
+            }
+            catch
+            {
+                // Retention cleanup should not fail a successful archive.
+            }
+        }
     }
 }

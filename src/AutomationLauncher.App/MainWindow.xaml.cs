@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Collections.Specialized;
 
 namespace AutomationLauncher.App;
 
@@ -13,6 +14,7 @@ public partial class MainWindow : Window
         DataContext = viewModel;
         Icon = AppIconFactory.GetWindowIcon();
         StateChanged += HandleStateChanged;
+        viewModel.FileLogs.CollectionChanged += HandleFileLogsCollectionChanged;
     }
 
     public void PrepareForExit()
@@ -63,6 +65,14 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void ArchiveNow_Click(object sender, RoutedEventArgs e)
+    {
+        if (System.Windows.Application.Current is App app)
+        {
+            await app.RunArchiveNowFromDashboardAsync();
+        }
+    }
+
     private async void RunStartupAutomation_Click(object sender, RoutedEventArgs e)
     {
         if (System.Windows.Application.Current is App app)
@@ -87,6 +97,14 @@ public partial class MainWindow : Window
         }
     }
 
+    private void DeleteError_Click(object sender, RoutedEventArgs e)
+    {
+        if (System.Windows.Application.Current is App app)
+        {
+            app.DeleteErrorFromDashboard();
+        }
+    }
+
     private async void RunManagedApplications_Click(object sender, RoutedEventArgs e)
     {
         if (System.Windows.Application.Current is App app)
@@ -101,5 +119,20 @@ public partial class MainWindow : Window
         {
             await app.StopManagedApplicationsFromMenuAsync();
         }
+    }
+
+    private void HandleFileLogsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel || !viewModel.IsLogAutoScrollEnabled)
+        {
+            return;
+        }
+
+        if (LogsListBox.Items.Count == 0)
+        {
+            return;
+        }
+
+        LogsListBox.ScrollIntoView(LogsListBox.Items[0]);
     }
 }

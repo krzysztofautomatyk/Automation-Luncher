@@ -14,19 +14,40 @@ public sealed class PathService : IPathService
 
     public string BuildArchiveFilePath(string projectPath, string outputDirectory, DateTimeOffset timestamp)
     {
-        var normalizedDirectory = NormalizePath(outputDirectory);
-        var projectName = Path.GetFileNameWithoutExtension(projectPath);
-        if (string.IsNullOrWhiteSpace(projectName))
-        {
-            projectName = "TIAProject";
-        }
+        var fileNameWithoutExtension = $"{Environment.MachineName}_automaticBackup_{timestamp:yyyyMMdd_HHmmss}";
+        return BuildArchiveFilePath(projectPath, outputDirectory, fileNameWithoutExtension);
+    }
 
-        var fileName = $"{projectName}_{timestamp:yyyyMMdd_HHmmss}.zap19";
-        return Path.Combine(normalizedDirectory, fileName);
+    public string BuildArchiveFilePath(string projectPath, string outputDirectory, string fileNameWithoutExtension)
+    {
+        var normalizedDirectory = NormalizePath(outputDirectory);
+        var archiveExtension = ResolveArchiveExtension(projectPath);
+        return Path.Combine(normalizedDirectory, fileNameWithoutExtension + archiveExtension);
     }
 
     public void EnsureDirectoryExists(string path)
     {
         Directory.CreateDirectory(path);
+    }
+
+    private static string ResolveArchiveExtension(string projectPath)
+    {
+        var projectExtension = (Path.GetExtension(projectPath) ?? string.Empty).Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(projectExtension))
+        {
+            return ".zap19";
+        }
+
+        if (projectExtension.StartsWith(".zap", StringComparison.OrdinalIgnoreCase))
+        {
+            return projectExtension;
+        }
+
+        if (projectExtension.Length > 3 && projectExtension.StartsWith(".ap", StringComparison.OrdinalIgnoreCase))
+        {
+            return ".zap" + projectExtension.Substring(3);
+        }
+
+        return ".zap19";
     }
 }

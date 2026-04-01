@@ -2,6 +2,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using AutomationLauncher.Domain.Models;
 
 namespace AutomationLauncher.App;
 
@@ -224,6 +225,16 @@ public sealed class ProtectedApplicationSettingsStore : IProtectedApplicationSet
         settings.Logging.MinimumLevel = string.IsNullOrWhiteSpace(settings.Logging.MinimumLevel)
             ? "Information"
             : settings.Logging.MinimumLevel.Trim();
+
+        if (!Enum.IsDefined(typeof(ArchiveBackupFlow), settings.Archive.BackupFlow))
+        {
+            settings.Archive.BackupFlow = ArchiveBackupFlow.TimestampedRetention;
+        }
+
+        if (settings.Archive.SuccessfulBackupRetentionCount < 0)
+        {
+            settings.Archive.SuccessfulBackupRetentionCount = 0;
+        }
     }
 
     private static bool VerifyPassword(string password, string saltBase64, string expectedHashBase64)

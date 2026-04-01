@@ -24,7 +24,8 @@ public partial class App : System.Windows.Application
         None,
         Startup,
         StopPending,
-        Archiving
+        Archiving,
+        Error
     }
 
     private static Mutex? _singleInstanceMutex;
@@ -39,6 +40,7 @@ public partial class App : System.Windows.Application
     private ToolStripMenuItem? _openAutostartFolderMenuItem;
     private ToolStripMenuItem? _openControlFilesFolderMenuItem;
     private ToolStripMenuItem? _openLogFolderMenuItem;
+    private ToolStripMenuItem? _deleteErrorMenuItem;
     private ToolStripMenuItem? _loginMenuItem;
     private ToolStripMenuItem? _logoutMenuItem;
     private MainWindow? _mainWindow;
@@ -56,12 +58,14 @@ public partial class App : System.Windows.Application
     private TrayIndicatorMode _trayIndicatorMode;
     private bool _launchedFromWindowsStartup;
     private bool _isHandlingControlSignal;
+    private bool _hasErrorControlFile;
 
     public App()
     {
         DispatcherUnhandledException += (_, args) =>
         {
             Log.Logger.Error(args.Exception, "Unhandled UI exception");
+            MarkErrorControlFile("Unhandled UI exception.");
             ReportFatalError($"Critical error: {args.Exception.Message}");
             args.Handled = true;
         };
@@ -69,6 +73,7 @@ public partial class App : System.Windows.Application
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             Log.Logger.Fatal(args.ExceptionObject as Exception, "Unhandled domain exception");
+            MarkErrorControlFile("Unhandled domain exception.");
             ReportFatalError("A fatal application error occurred. Automation Launcher will close.");
         };
     }
@@ -321,7 +326,7 @@ public partial class App : System.Windows.Application
         menu.Items.Add("About", null, (_, _) => ShowAboutDialog());
         _checkTiaConnectionMenuItem = new ToolStripMenuItem("Check TIA connection", null, (_, _) => viewModel.CheckTiaConnectionCommand.Execute(null));
         menu.Items.Add(_checkTiaConnectionMenuItem);
-        _archiveNowMenuItem = new ToolStripMenuItem("Create archive now", null, (_, _) => viewModel.ArchiveCommand.Execute(null));
+        _archiveNowMenuItem = new ToolStripMenuItem("Create archive now", null, async (_, _) => await RunArchiveNowFromMenuAsync());
         menu.Items.Add(_archiveNowMenuItem);
         _runStartupAutomationMenuItem = new ToolStripMenuItem("Run startup automation now", null, async (_, _) => await RunStartupSequenceManuallyAsync());
         menu.Items.Add(_runStartupAutomationMenuItem);
@@ -336,6 +341,8 @@ public partial class App : System.Windows.Application
         menu.Items.Add(_openControlFilesFolderMenuItem);
         _openLogFolderMenuItem = new ToolStripMenuItem("Open log folder", null, (_, _) => viewModel.OpenLogDirectoryCommand.Execute(null));
         menu.Items.Add(_openLogFolderMenuItem);
+        _deleteErrorMenuItem = new ToolStripMenuItem("Delete error", null, (_, _) => DeleteErrorMarkerFile());
+        menu.Items.Add(_deleteErrorMenuItem);
         _loginMenuItem = new ToolStripMenuItem("Log in", null, (_, _) => LoginSession());
         menu.Items.Add(_loginMenuItem);
         _logoutMenuItem = new ToolStripMenuItem("Log out", null, (_, _) => LogoutSession("Session locked by user.", false));
@@ -407,6 +414,40 @@ public partial class App : System.Windows.Application
         await HandleStartControlFileDetectedAsync();
     }
 
+    public async Task RunArchiveNowFromMenuAsync()
+    {
+        if (_sessionCoordinator?.IsAuthenticated != true || _host is null)
+        {
+            return;
+        }
+
+        var viewModel = _host.Services.GetRequiredService<MainWindowViewModel>();
+        if (viewModel.IsBusy)
+        {
+            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Archive command ignored because another operation is already running.", ToolTipIcon.Info);
+            return;
+        }
+
+        SetTrayIndicatorMode(TrayIndicatorMode.Archiving);
+        DeleteControlFile(GetControlFilePath("archok"));
+
+        var archiveCreated = await viewModel.RunArchiveFromControlFileWithResultAsync();
+        if (archiveCreated)
+        {
+            SetTrayIndicatorMode(GetPreferredTrayIndicatorMode());
+            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Archive created successfully.", ToolTipIcon.Info);
+            return;
+        }
+
+        MarkErrorControlFile("Manual archive request failed.");
+        _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Archive failed. Error marker created.", ToolTipIcon.Error);
+    }
+
+    public async Task RunArchiveNowFromDashboardAsync()
+    {
+        await RunArchiveNowFromMenuAsync();
+    }
+
     public async Task StopManagedApplicationsFromMenuAsync()
     {
         if (_sessionCoordinator?.IsAuthenticated != true)
@@ -425,6 +466,11 @@ public partial class App : System.Windows.Application
     public void LoginFromDashboard()
     {
         LoginSession();
+    }
+
+    public void DeleteErrorFromDashboard()
+    {
+        DeleteErrorMarkerFile();
     }
 
     private void ShowAboutDialog()
@@ -616,8 +662,8 @@ public partial class App : System.Windows.Application
         catch (Exception ex)
         {
             await StopTrackedStartupProcessesAsync();
-            TransitionHostControlState(HostControlState.Error, $"Startup automation failed: {ex.Message}");
             Log.Logger.Error(ex, "Startup automation failed");
+            MarkErrorControlFile($"Startup automation failed: {ex.Message}");
             _notifyIcon?.ShowBalloonTip(3000, "Automation Launcher", $"Startup automation failed: {ex.Message}", ToolTipIcon.Error);
         }
         finally
@@ -703,6 +749,11 @@ public partial class App : System.Windows.Application
         if (_logoutMenuItem is not null)
         {
             _logoutMenuItem.Enabled = isAuthenticated;
+        }
+
+        if (_deleteErrorMenuItem is not null)
+        {
+            _deleteErrorMenuItem.Enabled = _hasErrorControlFile;
         }
     }
 
@@ -827,6 +878,11 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        if (mode != TrayIndicatorMode.Error && _hasErrorControlFile)
+        {
+            mode = TrayIndicatorMode.Error;
+        }
+
         _trayIndicatorMode = mode;
 
         if (mode == TrayIndicatorMode.None)
@@ -881,6 +937,7 @@ public partial class App : System.Windows.Application
         {
             TrayIndicatorMode.Archiving => AppIconFactory.GetArchiveTrayIcon(),
             TrayIndicatorMode.StopPending => AppIconFactory.GetStopTrayIcon(),
+            TrayIndicatorMode.Error => AppIconFactory.GetErrorTrayIcon(),
             _ => AppIconFactory.GetStartupTrayIcon()
         };
     }
@@ -893,6 +950,11 @@ public partial class App : System.Windows.Application
 
     private TrayIndicatorMode GetPreferredTrayIndicatorMode()
     {
+        if (_hasErrorControlFile || _hostControlState == HostControlState.Error)
+        {
+            return TrayIndicatorMode.Error;
+        }
+
         if (_hostControlState == HostControlState.Stopping)
         {
             return TrayIndicatorMode.StopPending;
@@ -909,6 +971,8 @@ public partial class App : System.Windows.Application
     private void InitializeHostControlFlow()
     {
         DeleteControlCommandFiles();
+        EnsureRunControlFileExists();
+        RefreshErrorMarkerState();
         NormalizeHostControlState();
         StartStartupControlFileMonitor();
     }
@@ -932,6 +996,9 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        EnsureRunControlFileExists();
+        RefreshErrorMarkerState();
+
         var startFilePath = GetControlFilePath("start");
         if (File.Exists(startFilePath))
         {
@@ -941,6 +1008,8 @@ public partial class App : System.Windows.Application
             try
             {
                 DeleteControlFile(startFilePath);
+                CleanupControlFilesExceptRun();
+                RefreshErrorMarkerState();
                 await HandleStartControlFileDetectedAsync();
             }
             finally
@@ -960,6 +1029,8 @@ public partial class App : System.Windows.Application
             try
             {
                 DeleteControlFile(stopFilePath);
+                CleanupControlFilesExceptRun();
+                RefreshErrorMarkerState();
                 await HandleStopControlFileDetectedAsync();
             }
             finally
@@ -970,19 +1041,21 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        var makeArchiveFilePath = GetControlFilePath("makearchive");
-        if (!File.Exists(makeArchiveFilePath))
+        var marchFilePath = GetControlFilePath("march");
+        if (!File.Exists(marchFilePath))
         {
             return;
         }
 
-        Log.Logger.Information("Detected makearchive control file at {ControlFilePath}", makeArchiveFilePath);
+        Log.Logger.Information("Detected march control file at {ControlFilePath}", marchFilePath);
 
         _isHandlingControlSignal = true;
         try
         {
-            DeleteControlFile(makeArchiveFilePath);
-            await HandleMakeArchiveControlFileDetectedAsync();
+            DeleteControlFile(marchFilePath);
+            CleanupControlFilesExceptRun();
+            RefreshErrorMarkerState();
+            await HandleMarchControlFileDetectedAsync();
         }
         finally
         {
@@ -992,82 +1065,120 @@ public partial class App : System.Windows.Application
 
     private async Task HandleStartControlFileDetectedAsync()
     {
-        if (_host is null)
+        try
         {
-            return;
-        }
+            if (_host is null)
+            {
+                return;
+            }
 
-        if (_isStartupSequenceRunning || _hostControlState == HostControlState.Running || _hostControlState == HostControlState.Stopping)
+            SetTrayIndicatorMode(TrayIndicatorMode.Startup);
+
+            if (_isStartupSequenceRunning || _hostControlState == HostControlState.Running || _hostControlState == HostControlState.Stopping)
+            {
+                _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Start command detected, but startup automation is already running.", ToolTipIcon.Info);
+                return;
+            }
+
+            var settings = _host.Services.GetRequiredService<AutomationLauncherSettings>();
+            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Start command detected. Running startup automation.", ToolTipIcon.Info);
+            await RunStartupSequenceAsync(settings, "Preparing startup automation from control file...");
+        }
+        catch (Exception ex)
         {
-            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Start command detected, but startup automation is already running.", ToolTipIcon.Info);
-            return;
+            Log.Logger.Error(ex, "Start command handling failed");
+            MarkErrorControlFile($"Start command handling failed: {ex.Message}");
+            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Start command handling failed. Error marker created.", ToolTipIcon.Error);
         }
-
-        var settings = _host.Services.GetRequiredService<AutomationLauncherSettings>();
-        _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Start command detected. Running startup automation.", ToolTipIcon.Info);
-        await RunStartupSequenceAsync(settings, "Preparing startup automation from control file...");
     }
 
     private async Task HandleStopControlFileDetectedAsync()
     {
-        if (_hostControlState != HostControlState.Running && !_isStartupSequenceRunning)
+        try
         {
-            Log.Logger.Information("Stop command ignored because the launcher is not in the running state.");
-            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Stop command ignored because no managed runtime is currently active.", ToolTipIcon.Info);
-            return;
+            SetTrayIndicatorMode(TrayIndicatorMode.StopPending);
+
+            if (_hostControlState != HostControlState.Running && !_isStartupSequenceRunning)
+            {
+                Log.Logger.Information("Stop command ignored because the launcher is not in the running state.");
+                _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Stop command ignored because no managed runtime is currently active.", ToolTipIcon.Info);
+                return;
+            }
+
+            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Stop command detected. Waiting 60 seconds before stopping startup applications.", ToolTipIcon.Info);
+            SetTrayIndicatorMode(TrayIndicatorMode.StopPending);
+            TransitionHostControlState(HostControlState.Stopping, "Stop command accepted.");
+
+            if (!await ConfirmStopSequenceAsync())
+            {
+                TransitionHostControlState(HostControlState.Running, "Stop command cancelled by user.");
+                SetTrayIndicatorMode(_isStartupSequenceRunning ? TrayIndicatorMode.Startup : TrayIndicatorMode.None);
+                _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Stop command was cancelled. Startup applications continue running.", ToolTipIcon.Info);
+                return;
+            }
+
+            if (_isStartupSequenceRunning)
+            {
+                _startupSequenceCancellationSource?.Cancel();
+                await WaitForStartupSequenceToStopAsync();
+            }
+
+            await StopTrackedStartupProcessesAsync();
+            TransitionHostControlState(HostControlState.Ready, "Managed applications were stopped.");
+            WriteControlFile(GetControlFilePath("ready"));
+            SetTrayIndicatorMode(TrayIndicatorMode.None);
+            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Startup applications were stopped. Ready marker created.", ToolTipIcon.Info);
         }
-
-        _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Stop command detected. Waiting 60 seconds before stopping startup applications.", ToolTipIcon.Info);
-        SetTrayIndicatorMode(TrayIndicatorMode.StopPending);
-        TransitionHostControlState(HostControlState.Stopping, "Stop command accepted.");
-
-        if (!await ConfirmStopSequenceAsync())
+        catch (Exception ex)
         {
-            TransitionHostControlState(HostControlState.Running, "Stop command cancelled by user.");
-            SetTrayIndicatorMode(_isStartupSequenceRunning ? TrayIndicatorMode.Startup : TrayIndicatorMode.None);
-            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Stop command was cancelled. Startup applications continue running.", ToolTipIcon.Info);
-            return;
+            Log.Logger.Error(ex, "Stop command handling failed");
+            MarkErrorControlFile($"Stop command handling failed: {ex.Message}");
+            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Stop command handling failed. Error marker created.", ToolTipIcon.Error);
         }
-
-        if (_isStartupSequenceRunning)
-        {
-            _startupSequenceCancellationSource?.Cancel();
-            await WaitForStartupSequenceToStopAsync();
-        }
-
-        await StopTrackedStartupProcessesAsync();
-        TransitionHostControlState(HostControlState.Ready, "Managed applications were stopped.");
-        SetTrayIndicatorMode(TrayIndicatorMode.None);
-        _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Startup applications were stopped. Ready marker created.", ToolTipIcon.Info);
     }
 
-    private async Task HandleMakeArchiveControlFileDetectedAsync()
+    private async Task HandleMarchControlFileDetectedAsync()
     {
-        if (_host is null)
+        try
         {
-            return;
+            if (_host is null)
+            {
+                return;
+            }
+
+            SetTrayIndicatorMode(TrayIndicatorMode.Archiving);
+
+            if (_host.Services.GetRequiredService<MainWindowViewModel>() is not MainWindowViewModel viewModel)
+            {
+                return;
+            }
+
+            if (viewModel.IsBusy)
+            {
+                Log.Logger.Information("March command ignored because the launcher is already busy.");
+                _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Archive command ignored because another operation is already running.", ToolTipIcon.Info);
+                return;
+            }
+
+            DeleteControlFile(GetControlFilePath("archok"));
+            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "March command detected. Starting archive workflow.", ToolTipIcon.Info);
+            var archiveCreated = await viewModel.RunArchiveFromControlFileWithResultAsync();
+
+            if (archiveCreated)
+            {
+                WriteControlFile(GetControlFilePath("archok"));
+                _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Archive created successfully. Archok marker file written.", ToolTipIcon.Info);
+                return;
+            }
+
+            MarkErrorControlFile("March command finished without archive success.");
+            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "March command failed. Error marker created.", ToolTipIcon.Error);
         }
-
-        if (_host.Services.GetRequiredService<MainWindowViewModel>() is not MainWindowViewModel viewModel)
+        catch (Exception ex)
         {
-            return;
-        }
-
-        if (viewModel.IsBusy)
-        {
-            Log.Logger.Information("Makearchive command ignored because the launcher is already busy.");
-            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Archive command ignored because another operation is already running.", ToolTipIcon.Info);
-            return;
-        }
-
-        DeleteControlFile(GetControlFilePath("archivecreated"));
-        _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Makearchive command detected. Starting archive workflow.", ToolTipIcon.Info);
-        var archiveCreated = await viewModel.RunArchiveFromControlFileWithResultAsync();
-
-        if (archiveCreated)
-        {
-            WriteControlFile(GetControlFilePath("archivecreated"));
-            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Archive created successfully. Archive marker file written.", ToolTipIcon.Info);
+            Log.Logger.Error(ex, "March command handling failed");
+            MarkErrorControlFile($"March command handling failed: {ex.Message}");
+            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "March command handling failed. Error marker created.", ToolTipIcon.Error);
         }
     }
 
@@ -1301,27 +1412,20 @@ public partial class App : System.Windows.Application
     {
         DeleteControlFile(GetControlFilePath("start"));
         DeleteControlFile(GetControlFilePath("stop"));
-        DeleteControlFile(GetControlFilePath("makearchive"));
+        DeleteControlFile(GetControlFilePath("march"));
     }
 
     private void NormalizeHostControlState()
     {
-        var previousStateFiles = GetHostStateFilePaths().Where(File.Exists).ToList();
-        if (previousStateFiles.Count > 0)
-        {
-            Log.Logger.Information("Normalizing host control state on startup. Removing existing state markers: {StateMarkers}", string.Join(", ", previousStateFiles.Select(Path.GetFileName)));
-        }
-
-        TransitionHostControlState(HostControlState.Ready, "Application startup normalization.");
+        var normalizedState = _hasErrorControlFile
+            ? HostControlState.Error
+            : HostControlState.Ready;
+        TransitionHostControlState(normalizedState, "Application startup normalization.");
     }
 
     private void TransitionHostControlState(HostControlState newState, string reason)
     {
         var previousState = _hostControlState;
-        ClearHostStateFiles();
-
-        var stateFilePath = GetControlFilePath(GetStateFileSuffix(newState));
-        WriteControlFile(stateFilePath);
         _hostControlState = newState;
         NotifyHostControlStateChanged(newState);
         Log.Logger.Information("Host control state changed from {PreviousState} to {NewState}. Reason: {Reason}", previousState, newState, reason);
@@ -1337,36 +1441,102 @@ public partial class App : System.Windows.Application
 
     private void ClearAllHostControlFiles()
     {
-        DeleteControlCommandFiles();
-        ClearHostStateFiles();
-        DeleteControlFile(GetControlFilePath("archivecreated"));
-    }
-
-    private void ClearHostStateFiles()
-    {
-        foreach (var stateFilePath in GetHostStateFilePaths())
+        foreach (var controlFilePath in GetManagedControlFilePaths())
         {
-            DeleteControlFile(stateFilePath);
+            DeleteControlFile(controlFilePath);
         }
     }
 
-    private IEnumerable<string> GetHostStateFilePaths()
+    private void EnsureRunControlFileExists()
     {
-        yield return GetControlFilePath("ready");
-        yield return GetControlFilePath("run");
-        yield return GetControlFilePath("stopping");
-        yield return GetControlFilePath("error");
+        var runFilePath = GetControlFilePath("run");
+        if (!File.Exists(runFilePath))
+        {
+            WriteControlFile(runFilePath);
+        }
     }
 
-    private static string GetStateFileSuffix(HostControlState state)
+    private void CleanupControlFilesExceptRun()
     {
-        return state switch
+        foreach (var controlFilePath in GetManagedControlFilePaths().Where(path => !path.EndsWith(".run", StringComparison.OrdinalIgnoreCase)))
         {
-            HostControlState.Ready => "ready",
-            HostControlState.Running => "run",
-            HostControlState.Stopping => "stopping",
-            HostControlState.Error => "error",
-            _ => "ready"
-        };
+            DeleteControlFile(controlFilePath);
+        }
+    }
+
+    private void MarkErrorControlFile(string reason)
+    {
+        Log.Logger.Error("Control-flow error marker requested. Reason: {Reason}", reason);
+        CleanupControlFilesExceptRun();
+        WriteControlFile(GetControlFilePath("error"));
+        RefreshErrorMarkerState();
+        TransitionHostControlState(HostControlState.Error, reason);
+        SetTrayIndicatorMode(TrayIndicatorMode.Error);
+    }
+
+    private void DeleteErrorMarkerFile()
+    {
+        var errorFilePath = GetControlFilePath("error");
+        if (!File.Exists(errorFilePath))
+        {
+            RefreshErrorMarkerState();
+            return;
+        }
+
+        DeleteControlFile(errorFilePath);
+        RefreshErrorMarkerState();
+        _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Error marker file deleted.", ToolTipIcon.Info);
+    }
+
+    private void RefreshErrorMarkerState()
+    {
+        var hasErrorControlFile = File.Exists(GetControlFilePath("error"));
+        if (_hasErrorControlFile == hasErrorControlFile)
+        {
+            if (_host?.Services.GetService<MainWindowViewModel>() is MainWindowViewModel currentViewModel)
+            {
+                currentViewModel.SetErrorControlFilePresent(_hasErrorControlFile);
+            }
+
+            return;
+        }
+
+        _hasErrorControlFile = hasErrorControlFile;
+
+        if (_host?.Services.GetService<MainWindowViewModel>() is MainWindowViewModel viewModel)
+        {
+            viewModel.SetErrorControlFilePresent(_hasErrorControlFile);
+        }
+
+        if (_hasErrorControlFile)
+        {
+            if (_hostControlState != HostControlState.Error)
+            {
+                TransitionHostControlState(HostControlState.Error, "Error marker file exists.");
+            }
+
+            SetTrayIndicatorMode(TrayIndicatorMode.Error);
+            UpdateTrayMenuState();
+            return;
+        }
+
+        if (_hostControlState == HostControlState.Error)
+        {
+            TransitionHostControlState(HostControlState.Ready, "Error marker file removed.");
+        }
+
+        SetTrayIndicatorMode(GetPreferredTrayIndicatorMode());
+        UpdateTrayMenuState();
+    }
+
+    private IEnumerable<string> GetManagedControlFilePaths()
+    {
+        yield return GetControlFilePath("run");
+        yield return GetControlFilePath("ready");
+        yield return GetControlFilePath("error");
+        yield return GetControlFilePath("start");
+        yield return GetControlFilePath("stop");
+        yield return GetControlFilePath("march");
+        yield return GetControlFilePath("archok");
     }
 }

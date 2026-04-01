@@ -123,7 +123,7 @@
                             Content="Create archive now"
                             Style="{StaticResource PrimaryActionButtonStyle}"
                             IsEnabled="{Binding CanUseProtectedActions}"
-                            Command="{Binding ArchiveCommand}" />
+                            Click="ArchiveNow_Click" />
                 </UniformGrid>
 
                 <TextBlock Margin="0,12,0,0"
@@ -157,7 +157,7 @@
                             Command="{Binding OpenStartupFolderCommand}" />
                 </UniformGrid>
 
-                <UniformGrid Columns="4" Margin="0,10,0,0">
+                <UniformGrid Columns="5" Margin="0,10,0,0">
                     <Button Margin="0,0,12,0"
                             Height="34"
                             Content="Open control files folder"
@@ -171,6 +171,13 @@
                             Command="{Binding OpenLogDirectoryCommand}" />
 
                     <Button Margin="0,0,12,0"
+                            Height="34"
+                            Content="Delete error"
+                            Style="{StaticResource DangerActionButtonStyle}"
+                            IsEnabled="{Binding HasErrorControlFile}"
+                            Click="DeleteError_Click" />
+
+                        <Button Margin="0,0,12,0"
                             Height="34"
                             Content="Log in"
                             Style="{StaticResource PositiveActionButtonStyle}"
@@ -266,23 +273,20 @@
                         <TextBlock Grid.Row="11" Text="Ready file" FontWeight="SemiBold" Margin="0,8,0,0" />
                         <TextBlock Grid.Row="11" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostReadyFilePath}" TextWrapping="Wrap" />
 
-                        <TextBlock Grid.Row="12" Text="Stopping file" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="12" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostStoppingFilePath}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="12" Text="Error file" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="12" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostErrorFilePath}" TextWrapping="Wrap" />
 
-                        <TextBlock Grid.Row="13" Text="Error file" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="13" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostErrorFilePath}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="13" Text="Start file" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="13" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostStartFilePath}" TextWrapping="Wrap" />
 
-                        <TextBlock Grid.Row="14" Text="Start file" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="14" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostStartFilePath}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="14" Text="Stop file" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="14" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostStopFilePath}" TextWrapping="Wrap" />
 
-                        <TextBlock Grid.Row="15" Text="Stop file" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="15" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostStopFilePath}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="15" Text="March file" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="15" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostMarchFilePath}" TextWrapping="Wrap" />
 
-                        <TextBlock Grid.Row="16" Text="Makearchive file" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="16" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostMakeArchiveFilePath}" TextWrapping="Wrap" />
-
-                        <TextBlock Grid.Row="17" Text="Archive created file" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="17" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostArchiveCreatedFilePath}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="16" Text="Archok file" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="16" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostArchOkFilePath}" TextWrapping="Wrap" />
                     </Grid>
                 </StackPanel>
             </ScrollViewer>
@@ -303,18 +307,112 @@
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <TextBlock Text="Logs"
-                           FontSize="18"
-                           FontWeight="SemiBold" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-                <ListBox Grid.Row="1"
-                         Margin="0,12,0,0"
+                    <TextBlock Text="Logs"
+                               FontSize="18"
+                               FontWeight="SemiBold" />
+
+                    <TextBlock Grid.Column="1"
+                               VerticalAlignment="Center"
+                               Foreground="#5B6A72"
+                               FontWeight="SemiBold"
+                               Text="{Binding VisibleLogCount, StringFormat=Visible: {0}}" />
+                </Grid>
+
+                <Grid Grid.Row="1" Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBox Height="32"
+                             Margin="0,0,10,0"
+                             VerticalContentAlignment="Center"
+                             FontSize="13"
+                             Text="{Binding LogSearchText, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <Button Grid.Column="1"
+                            Height="32"
+                            Margin="0,0,10,0"
+                            Padding="10,4"
+                            Content="Clear"
+                            IsEnabled="{Binding HasLogSearchText}"
+                            Command="{Binding ClearLogSearchCommand}" />
+
+                    <TextBlock Grid.Column="2"
+                               VerticalAlignment="Center"
+                               Foreground="#5B6A72"
+                               Text="Search logs" />
+                </Grid>
+
+                <Grid Grid.Row="2" Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <CheckBox Content="Only ERR/WRN"
+                              VerticalAlignment="Center"
+                              IsChecked="{Binding ShowErrorsAndWarningsOnly}" />
+
+                    <CheckBox Grid.Column="1"
+                              Content="Auto-scroll"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Center"
+                              IsChecked="{Binding IsLogAutoScrollEnabled}" />
+                </Grid>
+
+                <ListBox x:Name="LogsListBox"
+                         Grid.Row="3"
+                         Margin="0,12,0,8"
                          ItemsSource="{Binding FileLogs}"
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+                         ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,0,4"
+                                    Padding="6,4"
+                                    CornerRadius="6"
+                                    Background="{Binding Background}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="44" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Text="{Binding Level}"
+                                               FontWeight="Bold"
+                                               Foreground="{Binding Foreground}" />
+
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding Message}"
+                                               Foreground="{Binding Foreground}"
+                                               TextWrapping="Wrap"
+                                               FontFamily="Consolas" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <TextBlock Grid.Row="4"
+                           Foreground="#5B6A72"
+                           TextWrapping="Wrap"
+                           FontFamily="Consolas"
+                           FontSize="11"
+                           Text="{Binding LoadedLogFilePath, StringFormat=Loaded file: {0}}" />
             </Grid>
         </Border>
 

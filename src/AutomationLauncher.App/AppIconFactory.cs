@@ -19,6 +19,7 @@ public static class AppIconFactory
     private static Icon? _startupTrayIcon;
     private static Icon? _stopTrayIcon;
     private static Icon? _archiveTrayIcon;
+    private static Icon? _errorTrayIcon;
     private static ImageSource? _windowIcon;
 
     public static Icon GetTrayIcon()
@@ -47,9 +48,9 @@ public static class AppIconFactory
         lock (SyncRoot)
         {
             _stopTrayIcon ??= BuildIcon(
-                DrawingColor.FromArgb(173, 28, 28),
-                DrawingColor.FromArgb(230, 74, 25),
-                DrawingColor.FromArgb(255, 252, 242, 242));
+                DrawingColor.FromArgb(166, 96, 15),
+                DrawingColor.FromArgb(242, 148, 31),
+                DrawingColor.FromArgb(255, 255, 248, 240));
             return (Icon)_stopTrayIcon.Clone();
         }
     }
@@ -63,6 +64,18 @@ public static class AppIconFactory
                 DrawingColor.FromArgb(64, 156, 255),
                 DrawingColor.FromArgb(242, 248, 255));
             return (Icon)_archiveTrayIcon.Clone();
+        }
+    }
+
+    public static Icon GetErrorTrayIcon()
+    {
+        lock (SyncRoot)
+        {
+            _errorTrayIcon ??= BuildIcon(
+                DrawingColor.FromArgb(131, 17, 24),
+                DrawingColor.FromArgb(206, 42, 42),
+                DrawingColor.FromArgb(255, 252, 244, 244));
+            return (Icon)_errorTrayIcon.Clone();
         }
     }
 

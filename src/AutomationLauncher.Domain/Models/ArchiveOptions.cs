@@ -4,6 +4,8 @@ public sealed class ArchiveOptions
 {
     public string ExpectedProjectPath { get; set; } = string.Empty;
     public string ArchiveOutputDirectory { get; set; } = string.Empty;
+    public ArchiveBackupFlow BackupFlow { get; set; } = ArchiveBackupFlow.TimestampedRetention;
+    public int SuccessfulBackupRetentionCount { get; set; }
     public bool TryDetectUnsavedChanges { get; set; } = true;
     public bool ForceSaveWhenDetectionUnavailable { get; set; } = true;
     public int SaveTimeoutSeconds { get; set; } = 90;
@@ -14,4 +16,10 @@ public sealed class ArchiveOptions
     public string? PreferredTiaVersion { get; set; }
     public string? OpennessAssemblyPath { get; set; }
     public IList<TiaPortalRuntimeConfiguration> KnownVersions { get; set; } = new List<TiaPortalRuntimeConfiguration>();
+}
+
+public enum ArchiveBackupFlow
+{
+    TimestampedRetention = 0,
+    StableFileWithOld = 1
 }

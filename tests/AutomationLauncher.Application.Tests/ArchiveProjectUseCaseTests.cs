@@ -1,6 +1,7 @@
 using AutomationLauncher.Application.UseCases;
 using AutomationLauncher.Domain.Contracts;
 using AutomationLauncher.Domain.Models;
+using System.IO;
 using Xunit;
 
 namespace AutomationLauncher.Application.Tests;
@@ -55,6 +56,106 @@ public sealed class ArchiveProjectUseCaseTests
         Assert.True(gateway.ArchiveCalled);
     }
 
+    [Fact]
+    public async Task TimestampedRetention_KeepsOnlyConfiguredSuccessfulBackups()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDirectory, $"{Environment.MachineName}_automaticBackup_20260101_010101.zap19"), "old-1");
+            File.WriteAllText(Path.Combine(tempDirectory, $"{Environment.MachineName}_automaticBackup_20260102_010101.zap19"), "old-2");
+
+            var context = new TiaProjectContext(true, @"C:\Projects\Target.ap19", "Target", "101", false, true);
+            var gateway = new FakeGateway(context)
+            {
+                ArchiveHandler = destinationArchivePath =>
+                {
+                    File.WriteAllText(destinationArchivePath, "new");
+                    return true;
+                }
+            };
+
+            var options = DefaultOptions();
+            options.ArchiveOutputDirectory = tempDirectory;
+            options.BackupFlow = ArchiveBackupFlow.TimestampedRetention;
+            options.SuccessfulBackupRetentionCount = 2;
+
+            var result = await BuildUseCase(gateway).ExecuteAsync(options, CancellationToken.None);
+
+            Assert.Equal(ArchiveOutcome.Success, result.Outcome);
+            var remainingFiles = Directory.GetFiles(tempDirectory, Environment.MachineName + "_automaticBackup_*.zap19");
+            Assert.Equal(2, remainingFiles.Length);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, true);
+        }
+    }
+
+    [Fact]
+    public async Task StableFileWithOld_DeletesOldAfterSuccessfulArchive()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var currentPath = Path.Combine(tempDirectory, Environment.MachineName + "_automaticBackup.zap19");
+            var oldPath = Path.Combine(tempDirectory, Environment.MachineName + "_automaticBackup_old.zap19");
+            File.WriteAllText(currentPath, "previous");
+
+            var context = new TiaProjectContext(true, @"C:\Projects\Target.ap19", "Target", "101", false, true);
+            var gateway = new FakeGateway(context)
+            {
+                ArchiveHandler = destinationArchivePath =>
+                {
+                    File.WriteAllText(destinationArchivePath, "new");
+                    return true;
+                }
+            };
+
+            var options = DefaultOptions();
+            options.ArchiveOutputDirectory = tempDirectory;
+            options.BackupFlow = ArchiveBackupFlow.StableFileWithOld;
+
+            var result = await BuildUseCase(gateway).ExecuteAsync(options, CancellationToken.None);
+
+            Assert.Equal(ArchiveOutcome.Success, result.Outcome);
+            Assert.True(File.Exists(currentPath));
+            Assert.False(File.Exists(oldPath));
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, true);
+        }
+    }
+
+    [Fact]
+    public async Task StableFileWithOld_KeepsOldWhenArchiveFails()
+    {
+        var tempDirectory = CreateTempDirectory();
+        try
+        {
+            var currentPath = Path.Combine(tempDirectory, Environment.MachineName + "_automaticBackup.zap19");
+            var oldPath = Path.Combine(tempDirectory, Environment.MachineName + "_automaticBackup_old.zap19");
+            File.WriteAllText(currentPath, "previous");
+
+            var context = new TiaProjectContext(true, @"C:\Projects\Target.ap19", "Target", "101", false, true);
+            var gateway = new FakeGateway(context) { ArchiveResult = false };
+
+            var options = DefaultOptions();
+            options.ArchiveOutputDirectory = tempDirectory;
+            options.BackupFlow = ArchiveBackupFlow.StableFileWithOld;
+
+            var result = await BuildUseCase(gateway).ExecuteAsync(options, CancellationToken.None);
+
+            Assert.Equal(ArchiveOutcome.ArchiveFailed, result.Outcome);
+            Assert.True(File.Exists(oldPath));
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, true);
+        }
+    }
+
     private static ArchiveProjectUseCase BuildUseCase(FakeGateway gateway)
     {
         return new ArchiveProjectUseCase(gateway, new FakePathService(), new FakeOperationLogger());
@@ -86,6 +187,7 @@ public sealed class ArchiveProjectUseCaseTests
 
         public bool SaveResult { get; set; } = true;
         public bool ArchiveResult { get; set; } = true;
+        public Func<string, bool>? ArchiveHandler { get; set; }
         public bool SaveCalled { get; private set; }
         public bool ArchiveCalled { get; private set; }
 
@@ -100,7 +202,7 @@ public sealed class ArchiveProjectUseCaseTests
         public Task<bool> ArchiveProjectAsync(string sessionId, string destinationArchivePath, TimeSpan timeout, CancellationToken cancellationToken)
         {
             ArchiveCalled = true;
-            return Task.FromResult(ArchiveResult);
+            return Task.FromResult(ArchiveHandler?.Invoke(destinationArchivePath) ?? ArchiveResult);
         }
     }
 
@@ -109,11 +211,21 @@ public sealed class ArchiveProjectUseCaseTests
         public string NormalizePath(string path) => path.Trim().Replace('/', '\\');
 
         public string BuildArchiveFilePath(string projectPath, string outputDirectory, DateTimeOffset timestamp)
-            => $"{outputDirectory}\\Target_{timestamp:yyyyMMdd_HHmmss}.zap19";
+            => BuildArchiveFilePath(projectPath, outputDirectory, $"{Environment.MachineName}_automaticBackup_{timestamp:yyyyMMdd_HHmmss}");
+
+        public string BuildArchiveFilePath(string projectPath, string outputDirectory, string fileNameWithoutExtension)
+            => Path.Combine(outputDirectory, fileNameWithoutExtension + ".zap19");
 
         public void EnsureDirectoryExists(string path)
         {
         }
+    }
+
+    private static string CreateTempDirectory()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "AutomationLauncherTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(path);
+        return path;
     }
 
     private sealed class FakeOperationLogger : IOperationLogger

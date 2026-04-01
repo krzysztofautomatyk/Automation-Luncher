@@ -52,6 +52,9 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <TextBlock Text="Host name" FontWeight="SemiBold" />
@@ -96,23 +99,52 @@
                     <TextBox Grid.Row="1" Grid.Column="1" Margin="0,12,10,0" Padding="8" Text="{Binding ArchiveOutputDirectory}" />
                     <Button Grid.Row="1" Grid.Column="2" Margin="0,12,0,0" Width="90" Content="Browse" Command="{Binding BrowseArchiveDirectoryCommand}" />
 
-                    <TextBlock Grid.Row="2" Margin="0,16,0,0" Text="TIA selection mode" FontWeight="SemiBold" />
+                        <TextBlock Grid.Row="2" Margin="0,12,0,0" Text="Backup flow" FontWeight="SemiBold" />
                     <ComboBox Grid.Row="2"
+                              Grid.Column="1"
+                              Margin="0,12,10,0"
+                              Padding="8"
+                              ItemsSource="{Binding ArchiveBackupFlows}"
+                              SelectedItem="{Binding SelectedArchiveBackupFlow}" />
+
+                        <TextBlock Grid.Row="3" Margin="0,12,0,0" Text="Successful backup retention" FontWeight="SemiBold" />
+                        <TextBox Grid.Row="3"
+                             Grid.Column="1"
+                             Margin="0,12,10,0"
+                             Padding="8"
+                             IsEnabled="{Binding IsTimestampedBackupFlowSelected}"
+                             Text="{Binding SuccessfulBackupRetentionCount}" />
+                        <TextBlock Grid.Row="3"
+                               Grid.Column="2"
+                               Margin="0,12,0,0"
+                               VerticalAlignment="Center"
+                               Foreground="#5B6A72"
+                               Text="0 = keep all" />
+
+                        <TextBlock Grid.Row="4"
+                               Grid.ColumnSpan="3"
+                               Margin="0,12,0,0"
+                               Foreground="#2F4456"
+                               TextWrapping="Wrap"
+                               Text="TimestampedRetention creates HOST_automaticBackup_yyyyMMdd_HHmmss.zapxx and optionally deletes older successful backups. StableFileWithOld creates HOST_automaticBackup.zapxx, renames the previous file to _old before the archive, deletes _old only after success, and leaves it untouched on failure." />
+
+                        <TextBlock Grid.Row="5" Margin="0,16,0,0" Text="TIA selection mode" FontWeight="SemiBold" />
+                        <ComboBox Grid.Row="5"
                               Grid.Column="1"
                               Margin="0,16,10,0"
                               Padding="8"
                               ItemsSource="{Binding TiaRuntimeSelectionModes}"
                               SelectedItem="{Binding TiaRuntimeSelectionMode}" />
 
-                    <TextBlock Grid.Row="3" Margin="0,12,0,0" Text="Preferred TIA runtime" FontWeight="SemiBold" />
-                    <ComboBox Grid.Row="3"
+                        <TextBlock Grid.Row="6" Margin="0,12,0,0" Text="Preferred TIA runtime" FontWeight="SemiBold" />
+                        <ComboBox Grid.Row="6"
                               Grid.Column="1"
                               Margin="0,12,10,0"
                               Padding="8"
                               ItemsSource="{Binding AvailableTiaRuntimes}"
                               SelectedItem="{Binding SelectedTiaRuntime}" />
 
-                    <Button Grid.Row="4"
+                        <Button Grid.Row="7"
                             Grid.ColumnSpan="3"
                             Margin="0,16,0,0"
                             Height="38"
@@ -266,6 +298,40 @@
                             Height="38"
                             Content="Open log folder"
                             Command="{Binding OpenLogDirectoryCommand}" />
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="6" Margin="0,16,0,0" Padding="16" Background="White" CornerRadius="12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="220" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock VerticalAlignment="Center"
+                               Text="Settings exchange"
+                               FontWeight="SemiBold" />
+
+                    <TextBlock Grid.Column="1"
+                               Margin="0,0,16,0"
+                               VerticalAlignment="Center"
+                               Foreground="#5B6A72"
+                               Text="Export current configuration to JSON or import JSON back into the protected settings store." />
+
+                    <Button Grid.Column="2"
+                            Width="120"
+                            Height="34"
+                            Margin="0,0,10,0"
+                            Content="Export"
+                            Command="{Binding ExportSettingsCommand}" />
+
+                    <Button Grid.Column="3"
+                            Width="120"
+                            Height="34"
+                            Content="Import"
+                            Command="{Binding ImportSettingsCommand}" />
                 </Grid>
             </Border>
 

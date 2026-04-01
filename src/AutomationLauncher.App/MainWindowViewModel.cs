@@ -3,8 +3,10 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Threading;
+using Media = System.Windows.Media;
 using AutomationLauncher.Application.UseCases;
 using AutomationLauncher.Domain.Contracts;
 using AutomationLauncher.Domain.Models;
@@ -13,11 +15,64 @@ using CommunityToolkit.Mvvm.Input;
 using Serilog;
 using Forms = System.Windows.Forms;
 using FileDialog = Microsoft.Win32.OpenFileDialog;
+using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
 
 namespace AutomationLauncher.App;
 
+public sealed class LogLineEntry
+{
+    private static readonly Media.Brush SearchMatchBackground = new Media.SolidColorBrush(Media.Color.FromRgb(255, 247, 204));
+    private static readonly Media.Brush ErrorBackground = new Media.SolidColorBrush(Media.Color.FromRgb(255, 232, 232));
+    private static readonly Media.Brush WarningBackground = new Media.SolidColorBrush(Media.Color.FromRgb(255, 242, 224));
+    private static readonly Media.Brush InfoBackground = new Media.SolidColorBrush(Media.Color.FromRgb(236, 247, 255));
+    private static readonly Media.Brush VerboseBackground = new Media.SolidColorBrush(Media.Color.FromRgb(245, 245, 245));
+    private static readonly Media.Brush DefaultBackground = Media.Brushes.White;
+
+    public LogLineEntry(string message, string level, bool isSearchMatch)
+    {
+        Message = message;
+        Level = level;
+        Foreground = GetForeground(level);
+        Background = isSearchMatch ? SearchMatchBackground : GetBackground(level);
+    }
+
+    public string Message { get; }
+
+    public string Level { get; }
+
+    public Media.Brush Foreground { get; }
+
+    public Media.Brush Background { get; }
+
+    private static Media.Brush GetForeground(string level)
+    {
+        return level switch
+        {
+            "ERR" or "FTL" => new Media.SolidColorBrush(Media.Color.FromRgb(137, 27, 27)),
+            "WRN" => new Media.SolidColorBrush(Media.Color.FromRgb(166, 101, 0)),
+            "DBG" => new Media.SolidColorBrush(Media.Color.FromRgb(48, 84, 120)),
+            "VRB" => new Media.SolidColorBrush(Media.Color.FromRgb(88, 88, 88)),
+            "INF" => new Media.SolidColorBrush(Media.Color.FromRgb(26, 72, 116)),
+            _ => new Media.SolidColorBrush(Media.Color.FromRgb(34, 34, 34))
+        };
+    }
+
+    private static Media.Brush GetBackground(string level)
+    {
+        return level switch
+        {
+            "ERR" or "FTL" => ErrorBackground,
+            "WRN" => WarningBackground,
+            "INF" => InfoBackground,
+            "DBG" or "VRB" => VerboseBackground,
+            _ => DefaultBackground
+        };
+    }
+}
+
 public partial class MainWindowViewModel : ObservableObject
 {
+    private const int MaxDisplayedLogLines = 5000;
     private readonly ArchiveProjectUseCase _archiveProjectUseCase;
     private readonly ITiaPortalGateway _tiaPortalGateway;
     private readonly ITiaPortalRuntimeCatalog _runtimeCatalog;
@@ -28,6 +83,7 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly AutomationLauncherSettings _settings;
     private readonly DispatcherTimer _sessionCountdownTimer;
     private readonly DispatcherTimer _fileLogRefreshTimer;
+    private readonly List<string> _allFileLogLines = new();
     private string _lastLogSnapshotKey = string.Empty;
     private bool _isInitializing = true;
 
@@ -36,6 +92,12 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     private string archiveOutputDirectory = string.Empty;
+
+    [ObservableProperty]
+    private string selectedArchiveBackupFlow = ArchiveBackupFlow.TimestampedRetention.ToString();
+
+    [ObservableProperty]
+    private int successfulBackupRetentionCount;
 
     [ObservableProperty]
     private bool tryDetectUnsavedChanges;
@@ -86,6 +148,9 @@ public partial class MainWindowViewModel : ObservableObject
     private HostControlState currentHostControlState = HostControlState.Ready;
 
     [ObservableProperty]
+    private bool hasErrorControlFile;
+
+    [ObservableProperty]
     private string hostName = Environment.MachineName;
 
     [ObservableProperty]
@@ -122,13 +187,31 @@ public partial class MainWindowViewModel : ObservableObject
     private int logRetentionFileCount = 30;
 
     [ObservableProperty]
+    private string logSearchText = string.Empty;
+
+    [ObservableProperty]
+    private bool showErrorsAndWarningsOnly;
+
+    [ObservableProperty]
+    private bool isLogAutoScrollEnabled = true;
+
+    [ObservableProperty]
+    private string loadedLogFilePath = "No log file loaded.";
+
+    [ObservableProperty]
     private string sessionTimeRemaining = "05:00";
 
     [ObservableProperty]
     private StartupSequenceEntry? selectedStartupSequenceEntry;
 
     public ObservableCollection<string> History { get; } = new();
-    public ObservableCollection<string> FileLogs { get; } = new();
+    public ObservableCollection<LogLineEntry> FileLogs { get; } = new();
+
+    public int VisibleLogCount => FileLogs.Count;
+
+    public bool HasLogSearchText => !string.IsNullOrWhiteSpace(LogSearchText);
+
+    public bool IsTimestampedBackupFlowSelected => string.Equals(SelectedArchiveBackupFlow, ArchiveBackupFlow.TimestampedRetention.ToString(), StringComparison.OrdinalIgnoreCase);
 
     public ObservableCollection<string> TiaRuntimeSelectionModes { get; } = new()
     {
@@ -137,6 +220,12 @@ public partial class MainWindowViewModel : ObservableObject
     };
 
     public ObservableCollection<TiaPortalRuntimeInfo> AvailableTiaRuntimes { get; } = new();
+
+    public ObservableCollection<string> ArchiveBackupFlows { get; } = new()
+    {
+        ArchiveBackupFlow.TimestampedRetention.ToString(),
+        ArchiveBackupFlow.StableFileWithOld.ToString()
+    };
 
     public ObservableCollection<StartupSequenceEntry> StartupSequenceEntries { get; } = new();
 
@@ -173,6 +262,8 @@ public partial class MainWindowViewModel : ObservableObject
 
         ExpectedProjectPath = _settings.Archive.ExpectedProjectPath;
         ArchiveOutputDirectory = _settings.Archive.ArchiveOutputDirectory;
+        SelectedArchiveBackupFlow = _settings.Archive.BackupFlow.ToString();
+        SuccessfulBackupRetentionCount = _settings.Archive.SuccessfulBackupRetentionCount;
         TryDetectUnsavedChanges = _settings.Archive.TryDetectUnsavedChanges;
         ForceSaveWhenDetectionUnavailable = _settings.Archive.ForceSaveWhenDetectionUnavailable;
         TiaRuntimeSelectionMode = _settings.Archive.TiaVersionSelectionMode.ToString();
@@ -205,6 +296,7 @@ public partial class MainWindowViewModel : ObservableObject
         };
         _fileLogRefreshTimer.Tick += HandleFileLogRefreshTick;
         _fileLogRefreshTimer.Start();
+        FileLogs.CollectionChanged += HandleFileLogsCollectionChanged;
 
         RefreshFileLogs(forceRefresh: true);
         UpdateSessionCountdown();
@@ -230,17 +322,15 @@ public partial class MainWindowViewModel : ObservableObject
 
     public string HostReadyFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.ready");
 
-    public string HostStoppingFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.stopping");
-
     public string HostErrorFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.error");
 
     public string HostStartFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.start");
 
     public string HostStopFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.stop");
 
-    public string HostMakeArchiveFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.makearchive");
+    public string HostMarchFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.march");
 
-    public string HostArchiveCreatedFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.archivecreated");
+    public string HostArchOkFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.archok");
 
     [RelayCommand(CanExecute = nameof(CanArchive))]
     private async Task SyncProjectFromTiaAsync()
@@ -361,6 +451,8 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 ExpectedProjectPath = ExpectedProjectPath,
                 ArchiveOutputDirectory = ArchiveOutputDirectory,
+                BackupFlow = ParseArchiveBackupFlow(),
+                SuccessfulBackupRetentionCount = Math.Max(0, SuccessfulBackupRetentionCount),
                 TryDetectUnsavedChanges = TryDetectUnsavedChanges,
                 ForceSaveWhenDetectionUnavailable = ForceSaveWhenDetectionUnavailable,
                 SaveTimeoutSeconds = _settings.Archive.SaveTimeoutSeconds,
@@ -603,6 +695,92 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void ExportSettings()
+    {
+        if (!EnsureAuthenticated())
+        {
+            return;
+        }
+
+        SyncSettingsModel();
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Export settings",
+            Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
+            DefaultExt = ".json",
+            FileName = $"automation-launcher-settings-{DateTime.Now:yyyyMMdd-HHmmss}.json"
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            var json = JsonSerializer.Serialize(_settings, BuildSettingsSerializerOptions());
+            File.WriteAllText(dialog.FileName, json);
+            SettingsStatusMessage = $"Settings exported to {dialog.FileName}";
+            AddHistory("OK", "SettingsExported", SettingsStatusMessage);
+        }
+        catch (Exception ex)
+        {
+            SettingsStatusMessage = $"Settings export failed: {ex.Message}";
+            AddHistory("ERROR", "SettingsExportFailed", ex.Message);
+        }
+    }
+
+    [RelayCommand]
+    private void ImportSettings()
+    {
+        if (!EnsureAuthenticated())
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_sessionState.SettingsPassword))
+        {
+            return;
+        }
+
+        var password = _sessionState.SettingsPassword!;
+
+        var dialog = new FileDialog
+        {
+            Title = "Import settings",
+            Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            var json = File.ReadAllText(dialog.FileName);
+            var importedSettings = JsonSerializer.Deserialize<AutomationLauncherSettings>(json, BuildSettingsSerializerOptions());
+            if (importedSettings is null)
+            {
+                throw new InvalidOperationException("Imported settings file is empty or invalid.");
+            }
+
+            ApplyLoadedSettings(_settings, importedSettings);
+            _protectedSettingsStore.Save(_settings, password);
+            ReloadFromSettings();
+            RefreshFileLogs(forceRefresh: true);
+            SettingsStatusMessage = $"Settings imported from {dialog.FileName}";
+            AddHistory("OK", "SettingsImported", SettingsStatusMessage);
+        }
+        catch (Exception ex)
+        {
+            SettingsStatusMessage = $"Settings import failed: {ex.Message}";
+            AddHistory("ERROR", "SettingsImportFailed", ex.Message);
+        }
+    }
+
+    [RelayCommand]
     private void ResetSessionTimer()
     {
         if (!EnsureAuthenticated())
@@ -672,24 +850,22 @@ public partial class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HostRunFilePath));
         OnPropertyChanged(nameof(HostReadyFilePath));
-        OnPropertyChanged(nameof(HostStoppingFilePath));
         OnPropertyChanged(nameof(HostErrorFilePath));
         OnPropertyChanged(nameof(HostStartFilePath));
         OnPropertyChanged(nameof(HostStopFilePath));
-        OnPropertyChanged(nameof(HostMakeArchiveFilePath));
-        OnPropertyChanged(nameof(HostArchiveCreatedFilePath));
+        OnPropertyChanged(nameof(HostMarchFilePath));
+        OnPropertyChanged(nameof(HostArchOkFilePath));
     }
 
     partial void OnControlFilesFolderPathChanged(string value)
     {
         OnPropertyChanged(nameof(HostRunFilePath));
         OnPropertyChanged(nameof(HostReadyFilePath));
-        OnPropertyChanged(nameof(HostStoppingFilePath));
         OnPropertyChanged(nameof(HostErrorFilePath));
         OnPropertyChanged(nameof(HostStartFilePath));
         OnPropertyChanged(nameof(HostStopFilePath));
-        OnPropertyChanged(nameof(HostMakeArchiveFilePath));
-        OnPropertyChanged(nameof(HostArchiveCreatedFilePath));
+        OnPropertyChanged(nameof(HostMarchFilePath));
+        OnPropertyChanged(nameof(HostArchOkFilePath));
     }
 
     partial void OnExpectedProjectPathChanged(string value)
@@ -710,6 +886,33 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         PersistSettings("Archive directory updated.");
+    }
+
+    partial void OnSelectedArchiveBackupFlowChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsTimestampedBackupFlowSelected));
+        if (!_sessionCoordinator.IsAuthenticated)
+        {
+            return;
+        }
+
+        PersistSettings("Archive backup flow updated.");
+    }
+
+    partial void OnSuccessfulBackupRetentionCountChanged(int value)
+    {
+        if (value < 0)
+        {
+            SuccessfulBackupRetentionCount = 0;
+            return;
+        }
+
+        if (!_sessionCoordinator.IsAuthenticated)
+        {
+            return;
+        }
+
+        PersistSettings("Archive retention updated.");
     }
 
     partial void OnTryDetectUnsavedChangesChanged(bool value)
@@ -844,6 +1047,28 @@ public partial class MainWindowViewModel : ObservableObject
         PersistSettings("Log retention updated.", loggingChangeRequiresRestart: true);
     }
 
+    partial void OnLogSearchTextChanged(string value)
+    {
+        OnPropertyChanged(nameof(HasLogSearchText));
+        ApplyLogFilter();
+    }
+
+    partial void OnShowErrorsAndWarningsOnlyChanged(bool value)
+    {
+        ApplyLogFilter();
+    }
+
+    [RelayCommand]
+    private void ClearLogSearch()
+    {
+        if (string.IsNullOrEmpty(LogSearchText))
+        {
+            return;
+        }
+
+        LogSearchText = string.Empty;
+    }
+
     private void LoadRuntimeCatalog()
     {
         AvailableTiaRuntimes.Clear();
@@ -943,6 +1168,8 @@ public partial class MainWindowViewModel : ObservableObject
     {
         _settings.Archive.ExpectedProjectPath = ExpectedProjectPath?.Trim() ?? string.Empty;
         _settings.Archive.ArchiveOutputDirectory = ArchiveOutputDirectory?.Trim() ?? string.Empty;
+        _settings.Archive.BackupFlow = ParseArchiveBackupFlow();
+        _settings.Archive.SuccessfulBackupRetentionCount = Math.Max(0, SuccessfulBackupRetentionCount);
         _settings.Archive.TryDetectUnsavedChanges = TryDetectUnsavedChanges;
         _settings.Archive.ForceSaveWhenDetectionUnavailable = ForceSaveWhenDetectionUnavailable;
         _settings.Archive.TiaVersionSelectionMode = string.Equals(TiaRuntimeSelectionMode, TiaPortalVersionSelectionMode.Manual.ToString(), StringComparison.OrdinalIgnoreCase)
@@ -1024,6 +1251,8 @@ public partial class MainWindowViewModel : ObservableObject
         _isInitializing = true;
         ExpectedProjectPath = _settings.Archive.ExpectedProjectPath;
         ArchiveOutputDirectory = _settings.Archive.ArchiveOutputDirectory;
+        SelectedArchiveBackupFlow = _settings.Archive.BackupFlow.ToString();
+        SuccessfulBackupRetentionCount = _settings.Archive.SuccessfulBackupRetentionCount;
         TryDetectUnsavedChanges = _settings.Archive.TryDetectUnsavedChanges;
         ForceSaveWhenDetectionUnavailable = _settings.Archive.ForceSaveWhenDetectionUnavailable;
         TiaRuntimeSelectionMode = _settings.Archive.TiaVersionSelectionMode.ToString();
@@ -1107,6 +1336,11 @@ public partial class MainWindowViewModel : ObservableObject
         RefreshFileLogs();
     }
 
+    private void HandleFileLogsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(VisibleLogCount));
+    }
+
     private void UpdateSessionCountdown()
     {
         if (!_sessionCoordinator.IsAuthenticated)
@@ -1129,28 +1363,40 @@ public partial class MainWindowViewModel : ObservableObject
                 FileLogs.Clear();
             }
 
+            _allFileLogLines.Clear();
+            LoadedLogFilePath = "No log file loaded.";
             _lastLogSnapshotKey = string.Empty;
             return;
         }
 
         var logFiles = Directory.GetFiles(logDirectoryPath, "automation-launcher-*.log");
-        Array.Sort(logFiles, StringComparer.OrdinalIgnoreCase);
-
-        var snapshotParts = new List<string>(logFiles.Length);
-        foreach (var logFile in logFiles)
+        if (logFiles.Length == 0)
         {
-            try
+            if (FileLogs.Count > 0)
             {
-                var info = new FileInfo(logFile);
-                snapshotParts.Add($"{info.Name}:{info.Length}:{info.LastWriteTimeUtc.Ticks}");
+                FileLogs.Clear();
             }
-            catch
-            {
-                snapshotParts.Add(logFile);
-            }
+
+            _allFileLogLines.Clear();
+            LoadedLogFilePath = "No log file loaded.";
+            _lastLogSnapshotKey = string.Empty;
+            return;
         }
 
-        var snapshotKey = string.Join("|", snapshotParts);
+        var activeLogFilePath = GetNewestLogFilePath(logFiles);
+        LoadedLogFilePath = activeLogFilePath;
+
+        var snapshotKey = activeLogFilePath;
+        try
+        {
+            var info = new FileInfo(activeLogFilePath);
+            snapshotKey = $"{info.FullName}:{info.Length}:{info.LastWriteTimeUtc.Ticks}";
+        }
+        catch
+        {
+            // Keep path-only snapshot key when metadata cannot be read.
+        }
+
         if (!forceRefresh && string.Equals(snapshotKey, _lastLogSnapshotKey, StringComparison.Ordinal))
         {
             return;
@@ -1158,24 +1404,139 @@ public partial class MainWindowViewModel : ObservableObject
 
         _lastLogSnapshotKey = snapshotKey;
 
-        var logLines = new List<string>();
+        var logLines = new Queue<string>();
+        try
+        {
+            foreach (var line in ReadSharedLogLines(activeLogFilePath))
+            {
+                logLines.Enqueue(line);
+                while (logLines.Count > MaxDisplayedLogLines)
+                {
+                    _ = logLines.Dequeue();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            AddHistory("WARN", "LogReadFailed", $"Unable to read active log file: {ex.Message}");
+        }
+
+        _allFileLogLines.Clear();
+        _allFileLogLines.AddRange(logLines);
+        ApplyLogFilter();
+    }
+
+    private void ApplyLogFilter()
+    {
+        var searchTerm = (LogSearchText ?? string.Empty).Trim();
+        var hasSearchTerm = !string.IsNullOrWhiteSpace(searchTerm);
+
+        FileLogs.Clear();
+        for (var index = _allFileLogLines.Count - 1; index >= 0; index--)
+        {
+            var logLine = _allFileLogLines[index];
+            var level = ExtractLogLevel(logLine);
+            if (ShowErrorsAndWarningsOnly && level is not ("ERR" or "FTL" or "WRN"))
+            {
+                continue;
+            }
+
+            if (hasSearchTerm && logLine.IndexOf(searchTerm, StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                continue;
+            }
+
+            FileLogs.Add(new LogLineEntry(logLine, level, hasSearchTerm));
+        }
+    }
+
+    private static string ExtractLogLevel(string logLine)
+    {
+        var openBracketIndex = logLine.IndexOf('[');
+        if (openBracketIndex < 0)
+        {
+            return "N/A";
+        }
+
+        var closeBracketIndex = logLine.IndexOf(']', openBracketIndex + 1);
+        if (closeBracketIndex < 0)
+        {
+            return "N/A";
+        }
+
+        var tokenLength = closeBracketIndex - openBracketIndex - 1;
+        if (tokenLength != 3)
+        {
+            return "N/A";
+        }
+
+        return logLine.Substring(openBracketIndex + 1, tokenLength).ToUpperInvariant();
+    }
+
+    private static string GetNewestLogFilePath(IEnumerable<string> logFiles)
+    {
+        string? newestPath = null;
+        var newestTimestamp = DateTime.MinValue;
+
         foreach (var logFile in logFiles)
         {
+            DateTime candidateTimestamp;
             try
             {
-                logLines.AddRange(File.ReadLines(logFile));
+                candidateTimestamp = File.GetLastWriteTimeUtc(logFile);
             }
             catch
             {
-                // Ignore transient file-read issues and keep already collected log lines.
+                candidateTimestamp = DateTime.MinValue;
+            }
+
+            if (newestPath is null || candidateTimestamp > newestTimestamp)
+            {
+                newestPath = logFile;
+                newestTimestamp = candidateTimestamp;
             }
         }
 
-        FileLogs.Clear();
-        foreach (var logLine in logLines)
+        return newestPath ?? string.Empty;
+    }
+
+    private static IEnumerable<string> ReadSharedLogLines(string filePath)
+    {
+        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+
+        while (!reader.EndOfStream)
         {
-            FileLogs.Add(logLine);
+            var line = reader.ReadLine();
+            if (line is not null)
+            {
+                yield return line;
+            }
         }
+    }
+
+    private static JsonSerializerOptions BuildSettingsSerializerOptions()
+    {
+        return new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNameCaseInsensitive = true
+        };
+    }
+
+    private static void ApplyLoadedSettings(AutomationLauncherSettings target, AutomationLauncherSettings source)
+    {
+        target.Archive = source.Archive ?? new ArchiveOptions();
+        target.Startup = source.Startup ?? new StartupSettings();
+        target.Logging = source.Logging ?? new LoggingSettings();
+        target.Ui = source.Ui ?? new UiSettings();
+    }
+
+    private ArchiveBackupFlow ParseArchiveBackupFlow()
+    {
+        return Enum.TryParse<ArchiveBackupFlow>(SelectedArchiveBackupFlow, ignoreCase: true, out var flow)
+            ? flow
+            : ArchiveBackupFlow.TimestampedRetention;
     }
 
     private string ResolveEffectiveLogDirectory()
@@ -1209,6 +1570,11 @@ public partial class MainWindowViewModel : ObservableObject
     public void SetHostControlState(HostControlState state)
     {
         CurrentHostControlState = state;
+    }
+
+    public void SetErrorControlFilePresent(bool isPresent)
+    {
+        HasErrorControlFile = isPresent;
     }
 
     public async Task RunArchiveFromControlFileAsync()
