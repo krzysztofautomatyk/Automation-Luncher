@@ -1,8 +1,11 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.DirectoryServices.AccountManagement;
 using System.IO;
+using System.Linq;
+using System.Security.Principal;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Threading;
@@ -21,12 +24,18 @@ namespace AutomationLauncher.App;
 
 public sealed class LogLineEntry
 {
-    private static readonly Media.Brush SearchMatchBackground = new Media.SolidColorBrush(Media.Color.FromRgb(255, 247, 204));
-    private static readonly Media.Brush ErrorBackground = new Media.SolidColorBrush(Media.Color.FromRgb(255, 232, 232));
-    private static readonly Media.Brush WarningBackground = new Media.SolidColorBrush(Media.Color.FromRgb(255, 242, 224));
-    private static readonly Media.Brush InfoBackground = new Media.SolidColorBrush(Media.Color.FromRgb(236, 247, 255));
-    private static readonly Media.Brush VerboseBackground = new Media.SolidColorBrush(Media.Color.FromRgb(245, 245, 245));
-    private static readonly Media.Brush DefaultBackground = Media.Brushes.White;
+    private static readonly Media.Brush SearchMatchBackground = CreateFrozenBrush(255, 247, 204);
+    private static readonly Media.Brush ErrorBackground = CreateFrozenBrush(255, 232, 232);
+    private static readonly Media.Brush WarningBackground = CreateFrozenBrush(255, 242, 224);
+    private static readonly Media.Brush InfoBackground = CreateFrozenBrush(236, 247, 255);
+    private static readonly Media.Brush VerboseBackground = CreateFrozenBrush(245, 245, 245);
+    private static readonly Media.Brush DefaultBackground = CreateFrozenBrush(255, 255, 255);
+    private static readonly Media.Brush ErrorForeground = CreateFrozenBrush(137, 27, 27);
+    private static readonly Media.Brush WarningForeground = CreateFrozenBrush(166, 101, 0);
+    private static readonly Media.Brush DebugForeground = CreateFrozenBrush(48, 84, 120);
+    private static readonly Media.Brush VerboseForeground = CreateFrozenBrush(88, 88, 88);
+    private static readonly Media.Brush InfoForeground = CreateFrozenBrush(26, 72, 116);
+    private static readonly Media.Brush DefaultForeground = CreateFrozenBrush(34, 34, 34);
 
     public LogLineEntry(string message, string level, bool isSearchMatch)
     {
@@ -48,12 +57,12 @@ public sealed class LogLineEntry
     {
         return level switch
         {
-            "ERR" or "FTL" => new Media.SolidColorBrush(Media.Color.FromRgb(137, 27, 27)),
-            "WRN" => new Media.SolidColorBrush(Media.Color.FromRgb(166, 101, 0)),
-            "DBG" => new Media.SolidColorBrush(Media.Color.FromRgb(48, 84, 120)),
-            "VRB" => new Media.SolidColorBrush(Media.Color.FromRgb(88, 88, 88)),
-            "INF" => new Media.SolidColorBrush(Media.Color.FromRgb(26, 72, 116)),
-            _ => new Media.SolidColorBrush(Media.Color.FromRgb(34, 34, 34))
+            "ERR" or "FTL" => ErrorForeground,
+            "WRN" => WarningForeground,
+            "DBG" => DebugForeground,
+            "VRB" => VerboseForeground,
+            "INF" => InfoForeground,
+            _ => DefaultForeground
         };
     }
 
@@ -68,11 +77,120 @@ public sealed class LogLineEntry
             _ => DefaultBackground
         };
     }
+
+    private static Media.Brush CreateFrozenBrush(byte red, byte green, byte blue)
+    {
+        var brush = new Media.SolidColorBrush(Media.Color.FromRgb(red, green, blue));
+        brush.Freeze();
+        return brush;
+    }
+}
+
+public sealed class RangeObservableCollection<T> : ObservableCollection<T>
+{
+    public void ReplaceRange(IEnumerable<T> items)
+    {
+        CheckReentrancy();
+
+        Items.Clear();
+        foreach (var item in items)
+        {
+            Items.Add(item);
+        }
+
+        OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+        OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+    }
+}
+
+internal sealed class LogRefreshResult
+{
+    public LogRefreshResult(string loadedLogFilePath, string snapshotKey, IReadOnlyList<string> logLines, string? errorMessage)
+    {
+        LoadedLogFilePath = loadedLogFilePath;
+        SnapshotKey = snapshotKey;
+        LogLines = logLines;
+        ErrorMessage = errorMessage;
+    }
+
+    public string LoadedLogFilePath { get; }
+
+    public string SnapshotKey { get; }
+
+    public IReadOnlyList<string> LogLines { get; }
+
+    public string? ErrorMessage { get; }
+
+    public static LogRefreshResult Empty(string loadedLogFilePath)
+    {
+        return new LogRefreshResult(loadedLogFilePath, string.Empty, Array.Empty<string>(), null);
+    }
+}
+
+internal sealed class OpennessAccessSnapshot
+{
+    public OpennessAccessSnapshot(
+        string currentWindowsUser,
+        bool isCurrentUserAdministrator,
+        bool isOpennessGroupAvailable,
+        bool isCurrentUserInOpennessGroup,
+        string opennessGroupStatus,
+        string scopeSummary,
+        string resolvedAccountSummary,
+        string discoverySummary,
+        IReadOnlyList<string> relatedGroups,
+        string resolvedGroupName,
+        string? historyCode,
+        string? historyMessage,
+        string historyLevel)
+    {
+        CurrentWindowsUser = currentWindowsUser;
+        IsCurrentUserAdministrator = isCurrentUserAdministrator;
+        IsOpennessGroupAvailable = isOpennessGroupAvailable;
+        IsCurrentUserInOpennessGroup = isCurrentUserInOpennessGroup;
+        OpennessGroupStatus = opennessGroupStatus;
+        ScopeSummary = scopeSummary;
+        ResolvedAccountSummary = resolvedAccountSummary;
+        DiscoverySummary = discoverySummary;
+        RelatedGroups = relatedGroups;
+        ResolvedGroupName = resolvedGroupName;
+        HistoryCode = historyCode;
+        HistoryMessage = historyMessage;
+        HistoryLevel = historyLevel;
+    }
+
+    public string CurrentWindowsUser { get; }
+
+    public bool IsCurrentUserAdministrator { get; }
+
+    public bool IsOpennessGroupAvailable { get; }
+
+    public bool IsCurrentUserInOpennessGroup { get; }
+
+    public string OpennessGroupStatus { get; }
+
+    public string ScopeSummary { get; }
+
+    public string ResolvedAccountSummary { get; }
+
+    public string DiscoverySummary { get; }
+
+    public IReadOnlyList<string> RelatedGroups { get; }
+
+    public string ResolvedGroupName { get; }
+
+    public string? HistoryCode { get; }
+
+    public string? HistoryMessage { get; }
+
+    public string HistoryLevel { get; }
 }
 
 public partial class MainWindowViewModel : ObservableObject
 {
     private const int MaxDisplayedLogLines = 5000;
+    private const string OpennessSecurityGroupName = "Siemens TIA Portal Openness";
     private readonly ArchiveProjectUseCase _archiveProjectUseCase;
     private readonly ITiaPortalGateway _tiaPortalGateway;
     private readonly ITiaPortalRuntimeCatalog _runtimeCatalog;
@@ -84,8 +202,14 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly DispatcherTimer _sessionCountdownTimer;
     private readonly DispatcherTimer _fileLogRefreshTimer;
     private readonly List<string> _allFileLogLines = new();
+    private readonly SemaphoreSlim _fileLogRefreshSemaphore = new(1, 1);
     private string _lastLogSnapshotKey = string.Empty;
     private bool _isInitializing = true;
+    private bool _pendingFileLogRefresh;
+
+    private readonly ILogger _log;
+    private readonly ILogger _opennessLog;
+    private readonly ILogger _historyLog;
 
     [ObservableProperty]
     private string expectedProjectPath = string.Empty;
@@ -131,6 +255,42 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     private string runtimeSelectionReason = "n/a";
+
+    [ObservableProperty]
+    private string currentWindowsUser = "n/a";
+
+    [ObservableProperty]
+    private bool isCurrentUserAdministrator;
+
+    [ObservableProperty]
+    private bool isOpennessGroupAvailable;
+
+    [ObservableProperty]
+    private bool? isCurrentUserInOpennessGroup;
+
+    [ObservableProperty]
+    private string opennessGroupStatus = "Openness group access has not been checked yet.";
+
+    [ObservableProperty]
+    private string opennessAccessActionMessage = "Use Check group access to validate current Windows permissions for TIA Openness.";
+
+    [ObservableProperty]
+    private string lastOpennessAccessCheck = "Not checked yet.";
+
+    [ObservableProperty]
+    private bool isCheckingOpennessAccess;
+
+    [ObservableProperty]
+    private string opennessCheckScope = "Local machine scope will be shown after the first check.";
+
+    [ObservableProperty]
+    private string resolvedWindowsAccount = "Resolved Windows account details will appear after the first check.";
+
+    [ObservableProperty]
+    private string opennessGroupDiscoverySummary = "Related local group discovery has not run yet.";
+
+    [ObservableProperty]
+    private string resolvedOpennessGroupName = "Not checked yet.";
 
     [ObservableProperty]
     private string statusMessage = "Ready";
@@ -205,7 +365,8 @@ public partial class MainWindowViewModel : ObservableObject
     private StartupSequenceEntry? selectedStartupSequenceEntry;
 
     public ObservableCollection<string> History { get; } = new();
-    public ObservableCollection<LogLineEntry> FileLogs { get; } = new();
+    public RangeObservableCollection<LogLineEntry> FileLogs { get; } = new();
+    public RangeObservableCollection<string> OpennessRelatedLocalGroups { get; } = new();
 
     public int VisibleLogCount => FileLogs.Count;
 
@@ -260,6 +421,10 @@ public partial class MainWindowViewModel : ObservableObject
         _autostartService = autostartService;
         _settings = settings;
 
+        _log = Log.ForContext<MainWindowViewModel>();
+        _opennessLog = Log.ForContext("SourceContext", "OpennessAccess");
+        _historyLog = Log.ForContext("SourceContext", "ActivityHistory");
+
         ExpectedProjectPath = _settings.Archive.ExpectedProjectPath;
         ArchiveOutputDirectory = _settings.Archive.ArchiveOutputDirectory;
         SelectedArchiveBackupFlow = _settings.Archive.BackupFlow.ToString();
@@ -298,7 +463,9 @@ public partial class MainWindowViewModel : ObservableObject
         _fileLogRefreshTimer.Start();
         FileLogs.CollectionChanged += HandleFileLogsCollectionChanged;
 
-        RefreshFileLogs(forceRefresh: true);
+        _ = RefreshFileLogsAsync(forceRefresh: true);
+        OpennessAccessActionMessage = "Loading current Openness access state...";
+        _ = RefreshOpennessAccessStatusAsync(addHistory: false, completionMessage: "Current Openness access state loaded.");
         UpdateSessionCountdown();
     }
 
@@ -307,6 +474,15 @@ public partial class MainWindowViewModel : ObservableObject
     public bool CanUseProtectedUtilities => IsSessionAuthenticated;
 
     public bool CanLoginSession => !IsSessionAuthenticated;
+
+    public string OpennessGroupName => OpennessSecurityGroupName;
+
+    public bool CanCheckOpennessGroupAccess => !IsCheckingOpennessAccess;
+
+    public bool CanRepairOpennessGroupMembership => !IsBusy
+        && !IsCheckingOpennessAccess
+        && IsOpennessGroupAvailable
+        && IsCurrentUserInOpennessGroup == false;
 
     public bool CanRunStartupAutomationManually => IsSessionAuthenticated
         && !IsStartupAutomationRunning
@@ -367,7 +543,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            Log.Logger.Error(ex, "SyncProjectFromTia failed");
+            _log.Error(ex, "TIA Portal project path synchronization failed unexpectedly");
             StatusMessage = ex.Message;
             AddHistory("ERROR", "SyncFailed", ex.Message);
         }
@@ -419,7 +595,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            Log.Logger.Error(ex, "CheckTiaConnection failed");
+            _log.Error(ex, "TIA Portal connection check failed unexpectedly");
             StatusMessage = $"Connection check failed: {ex.Message}";
             AddHistory("ERROR", "ConnectionCheckFailed", $"Connection check failed: {ex.Message}");
         }
@@ -429,6 +605,150 @@ public partial class MainWindowViewModel : ObservableObject
             CheckTiaConnectionCommand.NotifyCanExecuteChanged();
             ArchiveCommand.NotifyCanExecuteChanged();
             SyncProjectFromTiaCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanCheckOpennessGroupAccess))]
+    private async Task CheckOpennessGroupAccess()
+    {
+        IsCheckingOpennessAccess = true;
+        LastOpennessAccessCheck = "Check in progress...";
+        OpennessGroupStatus = "Checking local machine group membership and related Siemens/Openness groups...";
+        OpennessAccessActionMessage = "Checking local Windows account, administrator rights, and Siemens TIA Portal Openness group membership...";
+
+        _opennessLog.Information("Openness access check started by user action");
+
+        try
+        {
+            var snapshot = await Task.Run(GetOpennessAccessSnapshot);
+            ApplyOpennessAccessSnapshot(snapshot, addHistory: true);
+            LastOpennessAccessCheck = $"Last check: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
+            OpennessAccessActionMessage = "Group access check completed.";
+        }
+        catch (Exception ex)
+        {
+            OpennessGroupStatus = $"Openness group check failed: {ex.Message}";
+            OpennessAccessActionMessage = "Group access check failed.";
+            LastOpennessAccessCheck = $"Last check failed: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
+            _opennessLog.Error(ex, "Openness access check failed with an unhandled exception");
+            AddHistory("ERROR", "OpennessCheckFailed", ex.Message);
+        }
+        finally
+        {
+            IsCheckingOpennessAccess = false;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRepairOpennessGroupMembership))]
+    private async Task RepairOpennessGroupMembership()
+    {
+        IsCheckingOpennessAccess = true;
+        LastOpennessAccessCheck = "Repair in progress...";
+        OpennessGroupStatus = "Starting elevated repair for the local Siemens Openness group...";
+        OpennessAccessActionMessage = "Starting elevated repair. Confirm the Windows UAC prompt to continue.";
+
+        if (IsCurrentUserInOpennessGroup == true)
+        {
+            OpennessGroupStatus = "Current user already belongs to Siemens TIA Portal Openness.";
+            OpennessAccessActionMessage = "Repair skipped because user already has access.";
+            _opennessLog.Information(
+                "Group membership repair skipped — user {User} is already a member of {Group}",
+                CurrentWindowsUser, ResolvedOpennessGroupName);
+            IsCheckingOpennessAccess = false;
+            return;
+        }
+
+        if (!IsOpennessGroupAvailable || string.IsNullOrWhiteSpace(ResolvedOpennessGroupName))
+        {
+            OpennessGroupStatus = "No Openness group was found on this machine. Confirm TIA Openness installation.";
+            OpennessAccessActionMessage = "Repair unavailable because no Openness Windows group was found.";
+            _opennessLog.Warning(
+                "Group membership repair aborted — no Openness group exists on this machine. TIA Openness may not be installed");
+            IsCheckingOpennessAccess = false;
+            return;
+        }
+
+        var targetGroupName = ResolvedOpennessGroupName;
+        var userIdentity = string.IsNullOrWhiteSpace(CurrentWindowsUser)
+            ? Environment.UserName
+            : CurrentWindowsUser;
+
+        _opennessLog.Information(
+            "Starting group membership repair — User={User}, TargetGroup={Group}. UAC elevation required",
+            userIdentity, targetGroupName);
+
+        var processInfo = new ProcessStartInfo
+        {
+            FileName = "net",
+            Arguments = $"localgroup \"{targetGroupName}\" \"{userIdentity}\" /add",
+            Verb = "runas",
+            UseShellExecute = true,
+            WindowStyle = ProcessWindowStyle.Hidden
+        };
+
+        try
+        {
+            var process = Process.Start(processInfo);
+            if (process is null)
+            {
+                OpennessGroupStatus = "Unable to start elevated membership repair process.";
+                OpennessAccessActionMessage = "Repair could not start.";
+                _opennessLog.Error(
+                    "Failed to start elevated net.exe process for group membership repair — User={User}, Group={Group}",
+                    userIdentity, targetGroupName);
+                AddHistory("ERROR", "OpennessRepairFailed", OpennessGroupStatus);
+                return;
+            }
+
+            OpennessAccessActionMessage = "Waiting for elevated repair process to finish...";
+
+            var exitCode = await Task.Run(() =>
+            {
+                process.WaitForExit();
+                return process.ExitCode;
+            });
+
+            if (exitCode == 0)
+            {
+                OpennessGroupStatus = $"User was added to '{targetGroupName}'. Sign out and sign in (or restart) to refresh Windows security token.";
+                OpennessAccessActionMessage = "Repair finished successfully. Windows sign-out/sign-in is still required.";
+                _opennessLog.Information(
+                    "Group membership repair succeeded — User={User} added to group {Group}. Windows sign-out/sign-in required to refresh access token",
+                    userIdentity, targetGroupName);
+                AddHistory("OK", "OpennessRepairExecuted", OpennessGroupStatus);
+            }
+            else
+            {
+                OpennessGroupStatus = $"Membership repair finished with exit code {exitCode}.";
+                OpennessAccessActionMessage = "Repair process finished, but Windows reported a non-zero exit code.";
+                _opennessLog.Warning(
+                    "Group membership repair completed with non-zero exit code {ExitCode} — User={User}, Group={Group}. User may already be a member or the command was rejected",
+                    exitCode, userIdentity, targetGroupName);
+                AddHistory("WARN", "OpennessRepairExitCode", OpennessGroupStatus);
+            }
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            OpennessGroupStatus = "UAC elevation was cancelled. Membership was not changed.";
+            OpennessAccessActionMessage = "Repair was cancelled in the UAC prompt.";
+            _opennessLog.Warning(
+                "Group membership repair cancelled — UAC prompt was dismissed by the user. No membership change was made for {User}",
+                userIdentity);
+            AddHistory("WARN", "OpennessRepairCancelled", OpennessGroupStatus);
+        }
+        catch (Exception ex)
+        {
+            OpennessGroupStatus = $"Failed to add user to Openness group: {ex.Message}";
+            OpennessAccessActionMessage = "Repair failed.";
+            _opennessLog.Error(ex,
+                "Group membership repair failed with an unexpected exception — User={User}, Group={Group}",
+                userIdentity, targetGroupName);
+            AddHistory("ERROR", "OpennessRepairFailed", ex.Message);
+        }
+        finally
+        {
+            await RefreshOpennessAccessStatusAsync(addHistory: true, completionMessage: "Openness access state refreshed after repair.");
+            IsCheckingOpennessAccess = false;
         }
     }
 
@@ -484,7 +804,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            Log.Logger.Error(ex, "Archive command failed");
+            _log.Error(ex, "Archive workflow failed unexpectedly");
             StatusMessage = ex.Message;
             AddHistory("ERROR", "ArchiveFailed", ex.Message);
             return false;
@@ -769,7 +1089,7 @@ public partial class MainWindowViewModel : ObservableObject
             ApplyLoadedSettings(_settings, importedSettings);
             _protectedSettingsStore.Save(_settings, password);
             ReloadFromSettings();
-            RefreshFileLogs(forceRefresh: true);
+            _ = RefreshFileLogsAsync(forceRefresh: true);
             SettingsStatusMessage = $"Settings imported from {dialog.FileName}";
             AddHistory("OK", "SettingsImported", SettingsStatusMessage);
         }
@@ -817,6 +1137,7 @@ public partial class MainWindowViewModel : ObservableObject
         ArchiveCommand.NotifyCanExecuteChanged();
         SyncProjectFromTiaCommand.NotifyCanExecuteChanged();
         CheckTiaConnectionCommand.NotifyCanExecuteChanged();
+        RepairOpennessGroupMembershipCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanUseProtectedActions));
         OnPropertyChanged(nameof(CanRunStartupAutomationManually));
     }
@@ -962,6 +1283,23 @@ public partial class MainWindowViewModel : ObservableObject
         PersistSettings("Preferred TIA runtime updated.");
     }
 
+    partial void OnIsOpennessGroupAvailableChanged(bool value)
+    {
+        RepairOpennessGroupMembershipCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsCurrentUserInOpennessGroupChanged(bool? value)
+    {
+        RepairOpennessGroupMembershipCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsCheckingOpennessAccessChanged(bool value)
+    {
+        CheckOpennessGroupAccessCommand.NotifyCanExecuteChanged();
+        RepairOpennessGroupMembershipCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanCheckOpennessGroupAccess));
+    }
+
     partial void OnLaunchOnWindowsStartupChanged(bool value)
     {
         if (_isInitializing || !_sessionCoordinator.IsAuthenticated)
@@ -1018,7 +1356,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         PersistSettings("Log directory updated.", loggingChangeRequiresRestart: true);
-        RefreshFileLogs(forceRefresh: true);
+        _ = RefreshFileLogsAsync(forceRefresh: true);
     }
 
     partial void OnLogMinimumLevelChanged(string value)
@@ -1050,12 +1388,12 @@ public partial class MainWindowViewModel : ObservableObject
     partial void OnLogSearchTextChanged(string value)
     {
         OnPropertyChanged(nameof(HasLogSearchText));
-        ApplyLogFilter();
+        _ = ApplyLogFilterAsync();
     }
 
     partial void OnShowErrorsAndWarningsOnlyChanged(bool value)
     {
-        ApplyLogFilter();
+        _ = ApplyLogFilterAsync();
     }
 
     [RelayCommand]
@@ -1162,6 +1500,22 @@ public partial class MainWindowViewModel : ObservableObject
     {
         var normalizedCode = string.IsNullOrWhiteSpace(code) ? "General" : code;
         History.Insert(0, $"{DateTime.Now:HH:mm:ss} | {level} | {normalizedCode} | {message}");
+        switch (level)
+        {
+            case "OK":
+            case "INFO":
+                _historyLog.Information("[{EventCode}] {HistoryMessage}", normalizedCode, message);
+                break;
+            case "WARN":
+                _historyLog.Warning("[{EventCode}] {HistoryMessage}", normalizedCode, message);
+                break;
+            case "ERROR":
+                _historyLog.Error("[{EventCode}] {HistoryMessage}", normalizedCode, message);
+                break;
+            default:
+                _historyLog.Information("[{EventCode}] {HistoryMessage}", normalizedCode, message);
+                break;
+        }
     }
 
     private void SyncSettingsModel()
@@ -1233,6 +1587,8 @@ public partial class MainWindowViewModel : ObservableObject
         {
             IsSessionAuthenticated = true;
             ReloadFromSettings();
+            OpennessAccessActionMessage = "Refreshing Openness access state for the unlocked session...";
+            _ = RefreshOpennessAccessStatusAsync(addHistory: false, completionMessage: "Current Openness access state loaded.");
             SettingsStatusMessage = e.Message;
             StatusMessage = "Ready";
             UpdateSessionCountdown();
@@ -1246,9 +1602,329 @@ public partial class MainWindowViewModel : ObservableObject
         AddHistory("INFO", e.IsAutomatic ? "SessionTimedOut" : "SessionLocked", e.Message);
     }
 
+    private async Task RefreshOpennessAccessStatusAsync(bool addHistory, string completionMessage)
+    {
+        var snapshot = await Task.Run(GetOpennessAccessSnapshot);
+        ApplyOpennessAccessSnapshot(snapshot, addHistory);
+        LastOpennessAccessCheck = $"Last check: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
+        OpennessAccessActionMessage = completionMessage;
+    }
+
+    private void ApplyOpennessAccessSnapshot(OpennessAccessSnapshot snapshot, bool addHistory)
+    {
+        CurrentWindowsUser = snapshot.CurrentWindowsUser;
+        IsCurrentUserAdministrator = snapshot.IsCurrentUserAdministrator;
+        IsOpennessGroupAvailable = snapshot.IsOpennessGroupAvailable;
+        IsCurrentUserInOpennessGroup = snapshot.IsCurrentUserInOpennessGroup;
+        OpennessGroupStatus = snapshot.OpennessGroupStatus;
+        OpennessCheckScope = snapshot.ScopeSummary;
+        ResolvedWindowsAccount = snapshot.ResolvedAccountSummary;
+        OpennessGroupDiscoverySummary = snapshot.DiscoverySummary;
+        OpennessRelatedLocalGroups.ReplaceRange(snapshot.RelatedGroups);
+        ResolvedOpennessGroupName = snapshot.ResolvedGroupName;
+
+        var resolvedGroup = string.IsNullOrEmpty(snapshot.ResolvedGroupName) ? "(none found)" : snapshot.ResolvedGroupName;
+        if (snapshot.IsCurrentUserInOpennessGroup)
+        {
+            _opennessLog.Information(
+                "Access check passed — User={User}, IsAdmin={IsAdmin}, Group={Group}, Member={IsMember}",
+                snapshot.CurrentWindowsUser,
+                snapshot.IsCurrentUserAdministrator,
+                resolvedGroup,
+                snapshot.IsCurrentUserInOpennessGroup);
+        }
+        else if (snapshot.IsOpennessGroupAvailable)
+        {
+            _opennessLog.Warning(
+                "Access check: user is NOT a member — User={User}, IsAdmin={IsAdmin}, Group={Group}, Member={IsMember}",
+                snapshot.CurrentWindowsUser,
+                snapshot.IsCurrentUserAdministrator,
+                resolvedGroup,
+                snapshot.IsCurrentUserInOpennessGroup);
+        }
+        else
+        {
+            _opennessLog.Warning(
+                "Access check: no Openness group found on this machine — User={User}, IsAdmin={IsAdmin}, Group={Group}",
+                snapshot.CurrentWindowsUser,
+                snapshot.IsCurrentUserAdministrator,
+                resolvedGroup);
+        }
+
+        if (addHistory && !string.IsNullOrWhiteSpace(snapshot.HistoryCode) && !string.IsNullOrWhiteSpace(snapshot.HistoryMessage))
+        {
+            AddHistory(snapshot.HistoryLevel, snapshot.HistoryCode, snapshot.HistoryMessage!);
+        }
+    }
+
+    private static OpennessAccessSnapshot GetOpennessAccessSnapshot()
+    {
+        try
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            var identityName = identity?.Name;
+            var currentUser = !string.IsNullOrWhiteSpace(identityName)
+                ? identityName!
+                : Environment.UserName;
+
+            var principal = identity is null ? null : new WindowsPrincipal(identity);
+            var isAdministrator = principal?.IsInRole(WindowsBuiltInRole.Administrator) == true;
+            var scopeSummary = BuildOpennessScopeSummary(currentUser);
+
+            using var machineContext = new PrincipalContext(ContextType.Machine);
+            var relatedGroups = DiscoverRelatedLocalGroups(machineContext);
+            var (group, resolvedGroupName) = ResolveOpennessGroup(machineContext, relatedGroups);
+            var discoverySummary = BuildLocalGroupDiscoverySummary(relatedGroups, group is not null, resolvedGroupName);
+
+            var user = ResolveCurrentUserPrincipal(machineContext, currentUser, identity);
+            var resolvedAccountSummary = BuildResolvedAccountSummary(currentUser, user, identity);
+
+            if (group is null)
+            {
+                var missingMsg = $"No Openness group found. Searched for '{OpennessSecurityGroupName}' and any group containing 'Openness'. Confirm TIA Openness installation.";
+                return new OpennessAccessSnapshot(
+                    currentUser,
+                    isAdministrator,
+                    isOpennessGroupAvailable: false,
+                    isCurrentUserInOpennessGroup: false,
+                    opennessGroupStatus: missingMsg,
+                    scopeSummary,
+                    resolvedAccountSummary,
+                    discoverySummary,
+                    relatedGroups,
+                    resolvedGroupName: string.Empty,
+                    historyCode: "OpennessGroupMissing",
+                    historyMessage: missingMsg,
+                    historyLevel: "WARN");
+            }
+
+            if (user is null)
+            {
+                return new OpennessAccessSnapshot(
+                    currentUser,
+                    isAdministrator,
+                    isOpennessGroupAvailable: true,
+                    isCurrentUserInOpennessGroup: false,
+                    opennessGroupStatus: "Could not resolve current Windows account in local principal context.",
+                    scopeSummary,
+                    resolvedAccountSummary,
+                    discoverySummary,
+                    relatedGroups,
+                    resolvedGroupName,
+                    historyCode: "OpennessUserResolveFailed",
+                    historyMessage: "Could not resolve current Windows account in local principal context.",
+                    historyLevel: "WARN");
+            }
+
+            var isMember = user.IsMemberOf(group);
+            var status = isMember
+                ? $"Access OK: current user belongs to '{resolvedGroupName}'."
+                : $"Access missing: current user is not in '{resolvedGroupName}'.";
+
+            return new OpennessAccessSnapshot(
+                currentUser,
+                isAdministrator,
+                isOpennessGroupAvailable: true,
+                isCurrentUserInOpennessGroup: isMember,
+                opennessGroupStatus: status,
+                scopeSummary,
+                resolvedAccountSummary,
+                discoverySummary,
+                relatedGroups,
+                resolvedGroupName,
+                historyCode: isMember ? "OpennessAccessOk" : "OpennessAccessMissing",
+                historyMessage: status,
+                historyLevel: isMember ? "OK" : "WARN");
+        }
+        catch (PrincipalServerDownException ex)
+        {
+            return new OpennessAccessSnapshot(
+                Environment.UserName,
+                isCurrentUserAdministrator: false,
+                isOpennessGroupAvailable: false,
+                isCurrentUserInOpennessGroup: false,
+                opennessGroupStatus: $"Local security account manager is not available: {ex.Message}",
+                scopeSummary: "Target group scope: local machine only. The local security account manager was unavailable during the check.",
+                resolvedAccountSummary: "Windows account could not be fully resolved because the principal server was unavailable.",
+                discoverySummary: "Related local group discovery did not complete.",
+                relatedGroups: Array.Empty<string>(),
+                resolvedGroupName: "Unavailable",
+                historyCode: "OpennessPrincipalServerDown",
+                historyMessage: ex.Message,
+                historyLevel: "ERROR");
+        }
+        catch (Exception ex)
+        {
+            return new OpennessAccessSnapshot(
+                Environment.UserName,
+                isCurrentUserAdministrator: false,
+                isOpennessGroupAvailable: false,
+                isCurrentUserInOpennessGroup: false,
+                opennessGroupStatus: $"Openness group check failed: {ex.Message}",
+                scopeSummary: "Target group scope: local machine only.",
+                resolvedAccountSummary: "Windows account could not be fully resolved because the access check failed.",
+                discoverySummary: "Related local group discovery did not complete.",
+                relatedGroups: Array.Empty<string>(),
+                resolvedGroupName: "Unavailable",
+                historyCode: "OpennessCheckFailed",
+                historyMessage: ex.Message,
+                historyLevel: "ERROR");
+        }
+    }
+
+    private static (GroupPrincipal? group, string resolvedGroupName) ResolveOpennessGroup(
+        PrincipalContext machineContext, IReadOnlyList<string> relatedGroups)
+    {
+        // 1. Try the canonical group name first
+        var exact = GroupPrincipal.FindByIdentity(machineContext, IdentityType.Name, OpennessSecurityGroupName)
+            ?? GroupPrincipal.FindByIdentity(machineContext, OpennessSecurityGroupName);
+        if (exact is not null)
+            return (exact, OpennessSecurityGroupName);
+
+        // 2. Fallback: the first discovered group whose name contains "Openness"
+        var fallbackName = relatedGroups.FirstOrDefault(name =>
+            name.IndexOf("Openness", StringComparison.OrdinalIgnoreCase) >= 0);
+        if (!string.IsNullOrWhiteSpace(fallbackName))
+        {
+            var fallback = GroupPrincipal.FindByIdentity(machineContext, IdentityType.Name, fallbackName);
+            if (fallback is not null)
+                return (fallback, fallbackName!);
+        }
+
+        return (null, string.Empty);
+    }
+
+    private static UserPrincipal? ResolveCurrentUserPrincipal(PrincipalContext machineContext, string? identityName, WindowsIdentity? identity)
+    {
+        if (!string.IsNullOrWhiteSpace(identityName))
+        {
+            var byName = UserPrincipal.FindByIdentity(machineContext, IdentityType.Name, identityName);
+            if (byName is not null)
+            {
+                return byName;
+            }
+
+            var bySam = UserPrincipal.FindByIdentity(machineContext, IdentityType.SamAccountName, identityName);
+            if (bySam is not null)
+            {
+                return bySam;
+            }
+
+            var normalizedIdentityName = identityName!;
+            var shortName = normalizedIdentityName.Contains('\\')
+                ? normalizedIdentityName.Split('\\').LastOrDefault()
+                : normalizedIdentityName;
+            if (!string.IsNullOrWhiteSpace(shortName))
+            {
+                var byShortSam = UserPrincipal.FindByIdentity(machineContext, IdentityType.SamAccountName, shortName);
+                if (byShortSam is not null)
+                {
+                    return byShortSam;
+                }
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(Environment.UserName))
+        {
+            var byEnvironment = UserPrincipal.FindByIdentity(machineContext, IdentityType.SamAccountName, Environment.UserName);
+            if (byEnvironment is not null)
+            {
+                return byEnvironment;
+            }
+        }
+
+        var sid = identity?.User?.Value;
+        if (!string.IsNullOrWhiteSpace(sid))
+        {
+            return UserPrincipal.FindByIdentity(machineContext, IdentityType.Sid, sid);
+        }
+
+        return null;
+    }
+
+    private static string BuildOpennessScopeSummary(string currentUser)
+    {
+        var authority = currentUser.Contains('\\')
+            ? currentUser.Split('\\')[0]
+            : Environment.MachineName;
+        var accountScope = string.Equals(authority, Environment.MachineName, StringComparison.OrdinalIgnoreCase)
+            ? "local machine account"
+            : $"external account authority '{authority}'";
+
+        return $"Target group scope: local machine only. The signed-in account is evaluated as {currentUser} ({accountScope}). Domain or AzureAD identities can still be members of the local machine group.";
+    }
+
+    private static string BuildResolvedAccountSummary(string currentUser, UserPrincipal? user, WindowsIdentity? identity)
+    {
+        var sid = identity?.User?.Value ?? "n/a";
+        var authenticationType = string.IsNullOrWhiteSpace(identity?.AuthenticationType)
+            ? "n/a"
+            : identity!.AuthenticationType;
+
+        if (user is null)
+        {
+            return $"WindowsIdentity resolved as {currentUser}. SID: {sid}. Authentication: {authenticationType}. The account could not be resolved inside the local machine principal context.";
+        }
+
+        var resolvedName = !string.IsNullOrWhiteSpace(user.SamAccountName)
+            ? user.SamAccountName
+            : user.Name ?? currentUser;
+        var displayName = string.IsNullOrWhiteSpace(user.DisplayName)
+            ? resolvedName
+            : user.DisplayName;
+
+        return $"WindowsIdentity resolved as {currentUser}. Local principal match: {displayName} ({resolvedName}). SID: {sid}. Authentication: {authenticationType}.";
+    }
+
+    private static IReadOnlyList<string> DiscoverRelatedLocalGroups(PrincipalContext machineContext)
+    {
+        var groups = new List<string>();
+        using var query = new GroupPrincipal(machineContext);
+        using var searcher = new PrincipalSearcher(query);
+
+        foreach (var principal in searcher.FindAll())
+        {
+            using (principal)
+            {
+                if (principal is not GroupPrincipal group || string.IsNullOrWhiteSpace(group.Name))
+                {
+                    continue;
+                }
+
+                if (group.Name.IndexOf("Openness", StringComparison.OrdinalIgnoreCase) >= 0
+                    || group.Name.IndexOf("Siemens", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    groups.Add(group.Name);
+                }
+            }
+        }
+
+        return groups
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => string.Equals(name, OpennessSecurityGroupName, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static string BuildLocalGroupDiscoverySummary(IReadOnlyList<string> relatedGroups, bool targetGroupExists, string resolvedGroupName)
+    {
+        if (relatedGroups.Count == 0)
+        {
+            return "No local groups containing 'Openness' or 'Siemens' were found on this machine.";
+        }
+
+        var targetMessage = targetGroupExists
+            ? $"Group used for check: '{resolvedGroupName}'."
+            : "The exact target group is missing."
+            ;
+
+        return $"Found {relatedGroups.Count} local group(s) containing 'Openness' or 'Siemens'. {targetMessage}";
+    }
+
     private void ReloadFromSettings()
     {
         _isInitializing = true;
+
         ExpectedProjectPath = _settings.Archive.ExpectedProjectPath;
         ArchiveOutputDirectory = _settings.Archive.ArchiveOutputDirectory;
         SelectedArchiveBackupFlow = _settings.Archive.BackupFlow.ToString();
@@ -1333,7 +2009,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     private void HandleFileLogRefreshTick(object? sender, EventArgs e)
     {
-        RefreshFileLogs();
+        _ = RefreshFileLogsAsync();
     }
 
     private void HandleFileLogsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -1353,38 +2029,73 @@ public partial class MainWindowViewModel : ObservableObject
         SessionTimeRemaining = $"{Math.Max(0, (int)remaining.TotalMinutes):00}:{remaining.Seconds:00}";
     }
 
-    private void RefreshFileLogs(bool forceRefresh = false)
+    private async Task RefreshFileLogsAsync(bool forceRefresh = false)
+    {
+        if (!await _fileLogRefreshSemaphore.WaitAsync(0))
+        {
+            _pendingFileLogRefresh = true;
+            return;
+        }
+
+        try
+        {
+            do
+            {
+                _pendingFileLogRefresh = false;
+
+                var refreshResult = await Task.Run(() => ReadLatestLogSnapshot(forceRefresh));
+                if (refreshResult is null)
+                {
+                    continue;
+                }
+
+                if (refreshResult.ErrorMessage is not null)
+                {
+                    AddHistory("WARN", "LogReadFailed", refreshResult.ErrorMessage);
+                }
+
+                LoadedLogFilePath = refreshResult.LoadedLogFilePath;
+                _lastLogSnapshotKey = refreshResult.SnapshotKey;
+
+                _allFileLogLines.Clear();
+                _allFileLogLines.AddRange(refreshResult.LogLines);
+
+                await ApplyLogFilterAsync();
+                forceRefresh = false;
+            }
+            while (_pendingFileLogRefresh);
+        }
+        finally
+        {
+            _fileLogRefreshSemaphore.Release();
+        }
+    }
+
+    private async Task ApplyLogFilterAsync()
+    {
+        var snapshot = _allFileLogLines.ToArray();
+        var searchTerm = (LogSearchText ?? string.Empty).Trim();
+        var showErrorsAndWarningsOnlySnapshot = ShowErrorsAndWarningsOnly;
+
+        var filteredEntries = await Task.Run(() => BuildFilteredLogEntries(snapshot, searchTerm, showErrorsAndWarningsOnlySnapshot));
+        FileLogs.ReplaceRange(filteredEntries);
+    }
+
+    private LogRefreshResult? ReadLatestLogSnapshot(bool forceRefresh)
     {
         var logDirectoryPath = ResolveEffectiveLogDirectory();
         if (!Directory.Exists(logDirectoryPath))
         {
-            if (FileLogs.Count > 0)
-            {
-                FileLogs.Clear();
-            }
-
-            _allFileLogLines.Clear();
-            LoadedLogFilePath = "No log file loaded.";
-            _lastLogSnapshotKey = string.Empty;
-            return;
+            return LogRefreshResult.Empty("No log file loaded.");
         }
 
         var logFiles = Directory.GetFiles(logDirectoryPath, "automation-launcher-*.log");
         if (logFiles.Length == 0)
         {
-            if (FileLogs.Count > 0)
-            {
-                FileLogs.Clear();
-            }
-
-            _allFileLogLines.Clear();
-            LoadedLogFilePath = "No log file loaded.";
-            _lastLogSnapshotKey = string.Empty;
-            return;
+            return LogRefreshResult.Empty("No log file loaded.");
         }
 
         var activeLogFilePath = GetNewestLogFilePath(logFiles);
-        LoadedLogFilePath = activeLogFilePath;
 
         var snapshotKey = activeLogFilePath;
         try
@@ -1399,12 +2110,11 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (!forceRefresh && string.Equals(snapshotKey, _lastLogSnapshotKey, StringComparison.Ordinal))
         {
-            return;
+            return null;
         }
 
-        _lastLogSnapshotKey = snapshotKey;
-
         var logLines = new Queue<string>();
+        string? errorMessage = null;
         try
         {
             foreach (var line in ReadSharedLogLines(activeLogFilePath))
@@ -1418,25 +2128,22 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            AddHistory("WARN", "LogReadFailed", $"Unable to read active log file: {ex.Message}");
+            errorMessage = $"Unable to read active log file: {ex.Message}";
         }
 
-        _allFileLogLines.Clear();
-        _allFileLogLines.AddRange(logLines);
-        ApplyLogFilter();
+        return new LogRefreshResult(activeLogFilePath, snapshotKey, logLines.ToArray(), errorMessage);
     }
 
-    private void ApplyLogFilter()
+    private static IReadOnlyList<LogLineEntry> BuildFilteredLogEntries(IReadOnlyList<string> logLines, string searchTerm, bool showErrorsAndWarningsOnly)
     {
-        var searchTerm = (LogSearchText ?? string.Empty).Trim();
         var hasSearchTerm = !string.IsNullOrWhiteSpace(searchTerm);
+        var filteredEntries = new List<LogLineEntry>(logLines.Count);
 
-        FileLogs.Clear();
-        for (var index = _allFileLogLines.Count - 1; index >= 0; index--)
+        for (var index = logLines.Count - 1; index >= 0; index--)
         {
-            var logLine = _allFileLogLines[index];
+            var logLine = logLines[index];
             var level = ExtractLogLevel(logLine);
-            if (ShowErrorsAndWarningsOnly && level is not ("ERR" or "FTL" or "WRN"))
+            if (showErrorsAndWarningsOnly && level is not ("ERR" or "FTL" or "WRN"))
             {
                 continue;
             }
@@ -1446,8 +2153,10 @@ public partial class MainWindowViewModel : ObservableObject
                 continue;
             }
 
-            FileLogs.Add(new LogLineEntry(logLine, level, hasSearchTerm));
+            filteredEntries.Add(new LogLineEntry(logLine, level, hasSearchTerm));
         }
+
+        return filteredEntries;
     }
 
     private static string ExtractLogLevel(string logLine)

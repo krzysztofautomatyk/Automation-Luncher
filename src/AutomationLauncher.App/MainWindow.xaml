@@ -378,8 +378,12 @@
                          Grid.Row="3"
                          Margin="0,12,0,8"
                          ItemsSource="{Binding FileLogs}"
+                         ScrollViewer.CanContentScroll="True"
+                         ScrollViewer.IsDeferredScrollingEnabled="True"
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <Border Margin="0,0,0,4"

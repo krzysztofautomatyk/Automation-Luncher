@@ -21,6 +21,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="System.DirectoryServices.AccountManagement" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

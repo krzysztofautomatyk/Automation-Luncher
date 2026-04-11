@@ -267,7 +267,9 @@ public partial class App : System.Windows.Application
             .Enrich.FromLogContext()
             .Enrich.WithProperty("Application", "AutomationLauncher")
             .Enrich.WithProperty("MachineName", Environment.MachineName)
-            .WriteTo.Console(restrictedToMinimumLevel: minimumLevel)
+            .WriteTo.Console(
+                restrictedToMinimumLevel: minimumLevel,
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] [{SourceContext:l}] {Message:lj}{NewLine}{Exception}")
             .WriteTo.File(
                 path: Path.Combine(logDirectory, "automation-launcher-.log"),
                 rollingInterval: RollingInterval.Day,
@@ -275,7 +277,7 @@ public partial class App : System.Windows.Application
                 fileSizeLimitBytes: 10 * 1024 * 1024,
                 rollOnFileSizeLimit: true,
                 shared: true,
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}")
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] [{SourceContext:l}] {Message:lj}{NewLine}{Exception}")
             .CreateLogger();
     }
 
@@ -320,35 +322,35 @@ public partial class App : System.Windows.Application
 
         var viewModel = _host.Services.GetRequiredService<MainWindowViewModel>();
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Open dashboard", null, (_, _) => ShowMainWindow());
-        _settingsMenuItem = new ToolStripMenuItem("Settings", null, (_, _) => ShowSettingsDialog());
+        menu.Items.Add("Open dashboard", null, (_, _) => ExecuteOnUiThread(ShowMainWindow));
+        _settingsMenuItem = new ToolStripMenuItem("Settings", null, (_, _) => ExecuteOnUiThread(ShowSettingsDialog));
         menu.Items.Add(_settingsMenuItem);
-        menu.Items.Add("About", null, (_, _) => ShowAboutDialog());
-        _checkTiaConnectionMenuItem = new ToolStripMenuItem("Check TIA connection", null, (_, _) => viewModel.CheckTiaConnectionCommand.Execute(null));
+        menu.Items.Add("About", null, (_, _) => ExecuteOnUiThread(ShowAboutDialog));
+        _checkTiaConnectionMenuItem = new ToolStripMenuItem("Check TIA connection", null, (_, _) => ExecuteOnUiThread(() => viewModel.CheckTiaConnectionCommand.Execute(null)));
         menu.Items.Add(_checkTiaConnectionMenuItem);
-        _archiveNowMenuItem = new ToolStripMenuItem("Create archive now", null, async (_, _) => await RunArchiveNowFromMenuAsync());
+        _archiveNowMenuItem = new ToolStripMenuItem("Create archive now", null, async (_, _) => await ExecuteOnUiThreadAsync(RunArchiveNowFromMenuAsync));
         menu.Items.Add(_archiveNowMenuItem);
-        _runStartupAutomationMenuItem = new ToolStripMenuItem("Run startup automation now", null, async (_, _) => await RunStartupSequenceManuallyAsync());
+        _runStartupAutomationMenuItem = new ToolStripMenuItem("Run startup automation now", null, async (_, _) => await ExecuteOnUiThreadAsync(RunStartupSequenceManuallyAsync));
         menu.Items.Add(_runStartupAutomationMenuItem);
-        _runManagedApplicationsMenuItem = new ToolStripMenuItem("Run managed applications", null, async (_, _) => await RunManagedApplicationsFromMenuAsync());
+        _runManagedApplicationsMenuItem = new ToolStripMenuItem("Run managed applications", null, async (_, _) => await ExecuteOnUiThreadAsync(RunManagedApplicationsFromMenuAsync));
         menu.Items.Add(_runManagedApplicationsMenuItem);
-        _stopManagedApplicationsMenuItem = new ToolStripMenuItem("Stop managed applications", null, async (_, _) => await StopManagedApplicationsFromMenuAsync());
+        _stopManagedApplicationsMenuItem = new ToolStripMenuItem("Stop managed applications", null, async (_, _) => await ExecuteOnUiThreadAsync(StopManagedApplicationsFromMenuAsync));
         menu.Items.Add(_stopManagedApplicationsMenuItem);
         menu.Items.Add(new ToolStripSeparator());
-        _openAutostartFolderMenuItem = new ToolStripMenuItem("Open autostart folder", null, (_, _) => viewModel.OpenStartupFolderCommand.Execute(null));
+        _openAutostartFolderMenuItem = new ToolStripMenuItem("Open autostart folder", null, (_, _) => ExecuteOnUiThread(() => viewModel.OpenStartupFolderCommand.Execute(null)));
         menu.Items.Add(_openAutostartFolderMenuItem);
-        _openControlFilesFolderMenuItem = new ToolStripMenuItem("Open control files folder", null, (_, _) => viewModel.OpenControlFilesFolderCommand.Execute(null));
+        _openControlFilesFolderMenuItem = new ToolStripMenuItem("Open control files folder", null, (_, _) => ExecuteOnUiThread(() => viewModel.OpenControlFilesFolderCommand.Execute(null)));
         menu.Items.Add(_openControlFilesFolderMenuItem);
-        _openLogFolderMenuItem = new ToolStripMenuItem("Open log folder", null, (_, _) => viewModel.OpenLogDirectoryCommand.Execute(null));
+        _openLogFolderMenuItem = new ToolStripMenuItem("Open log folder", null, (_, _) => ExecuteOnUiThread(() => viewModel.OpenLogDirectoryCommand.Execute(null)));
         menu.Items.Add(_openLogFolderMenuItem);
-        _deleteErrorMenuItem = new ToolStripMenuItem("Delete error", null, (_, _) => DeleteErrorMarkerFile());
+        _deleteErrorMenuItem = new ToolStripMenuItem("Delete error", null, (_, _) => ExecuteOnUiThread(DeleteErrorMarkerFile));
         menu.Items.Add(_deleteErrorMenuItem);
-        _loginMenuItem = new ToolStripMenuItem("Log in", null, (_, _) => LoginSession());
+        _loginMenuItem = new ToolStripMenuItem("Log in", null, (_, _) => ExecuteOnUiThread(LoginSession));
         menu.Items.Add(_loginMenuItem);
-        _logoutMenuItem = new ToolStripMenuItem("Log out", null, (_, _) => LogoutSession("Session locked by user.", false));
+        _logoutMenuItem = new ToolStripMenuItem("Log out", null, (_, _) => ExecuteOnUiThread(() => LogoutSession("Session locked by user.", false)));
         menu.Items.Add(_logoutMenuItem);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Exit", null, (_, _) => ExitFromTray());
+        menu.Items.Add("Exit", null, (_, _) => ExecuteOnUiThread(ExitFromTray));
 
         _notifyIcon = new NotifyIcon
         {
@@ -358,18 +360,51 @@ public partial class App : System.Windows.Application
             ContextMenuStrip = menu
         };
 
-        _notifyIcon.DoubleClick += (_, _) => ShowMainWindow();
+        _notifyIcon.DoubleClick += (_, _) => ExecuteOnUiThread(ShowMainWindow);
         UpdateTrayMenuState();
+    }
+
+    private void ExecuteOnUiThread(Action action)
+    {
+        if (Dispatcher.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        Dispatcher.Invoke(action);
+    }
+
+    private Task ExecuteOnUiThreadAsync(Func<Task> action)
+    {
+        if (Dispatcher.CheckAccess())
+        {
+            return action();
+        }
+
+        return Dispatcher.InvokeAsync(action).Task.Unwrap();
     }
 
     private void ShowMainWindow()
     {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(ShowMainWindow);
+            return;
+        }
+
         _mainWindow ??= _host?.Services.GetRequiredService<MainWindow>();
         _mainWindow?.ShowDashboard();
     }
 
     private void ShowSettingsDialog()
     {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(ShowSettingsDialog);
+            return;
+        }
+
         if (_host is null)
         {
             return;

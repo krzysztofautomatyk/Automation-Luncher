@@ -7,6 +7,7 @@ namespace AutomationLauncher.App;
 public partial class MainWindow : Window
 {
     private bool _allowClose;
+    private bool _pendingLogScroll;
 
     public MainWindow(MainWindowViewModel viewModel)
     {
@@ -24,6 +25,12 @@ public partial class MainWindow : Window
 
     public void ShowDashboard()
     {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(ShowDashboard);
+            return;
+        }
+
         Show();
         WindowState = WindowState.Normal;
         Activate();
@@ -133,6 +140,21 @@ public partial class MainWindow : Window
             return;
         }
 
-        LogsListBox.ScrollIntoView(LogsListBox.Items[0]);
+        if (_pendingLogScroll)
+        {
+            return;
+        }
+
+        _pendingLogScroll = true;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            _pendingLogScroll = false;
+            if (LogsListBox.Items.Count == 0)
+            {
+                return;
+            }
+
+            LogsListBox.ScrollIntoView(LogsListBox.Items[0]);
+        }), System.Windows.Threading.DispatcherPriority.Background);
     }
 }
