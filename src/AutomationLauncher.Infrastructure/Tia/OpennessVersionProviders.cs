@@ -1,19 +1,8 @@
-using System.Reflection;
+﻿using System.Reflection;
 using AutomationLauncher.Domain.Models;
 using Serilog;
 
 namespace AutomationLauncher.Infrastructure.Tia;
-
-public interface IOpennessVersionProvider
-{
-    bool CanHandle(TiaPortalRuntimeInfo runtime);
-
-    TiaProjectContext TryReadOpenProject(Assembly assembly, int processId, TiaPortalRuntimeInfo runtime);
-
-    bool TrySaveProject(Assembly assembly, string sessionId, TiaPortalRuntimeInfo runtime);
-
-    bool TryArchiveProject(Assembly assembly, string sessionId, string destinationArchivePath, TiaPortalRuntimeInfo runtime);
-}
 
 internal abstract class OpennessVersionProviderBase : IOpennessVersionProvider
 {
@@ -521,99 +510,5 @@ internal abstract class OpennessVersionProviderBase : IOpennessVersionProvider
         public MethodInfo Method { get; }
 
         public object Mode { get; }
-    }
-}
-
-internal sealed class V15OpennessVersionProvider : OpennessVersionProviderBase
-{
-    protected override string[] ProjectDirtyPropertyNames => new[] { "Modified", "IsModified" };
-
-    protected override string[] ProjectPathPropertyNames => new[] { "FilePath", "Path", "ProjectPath" };
-
-    protected override string[] ArchiveEnumTypeNames => new[] { "Siemens.Engineering.ProjectArchivationMode", "Siemens.Engineering.ProjectArchiveMode" };
-
-    protected override string[] ArchiveModeNames => new[] { "Compressed", "Default" };
-
-    public override bool CanHandle(TiaPortalRuntimeInfo runtime)
-    {
-        return TryParseVersion(runtime.Version, 15);
-    }
-
-    private static bool TryParseVersion(string version, int expected)
-    {
-        return int.TryParse(version.TrimStart('V', 'v'), out var parsed) && parsed == expected;
-    }
-}
-
-internal sealed class V16OpennessVersionProvider : OpennessVersionProviderBase
-{
-    protected override string[] ProjectDirtyPropertyNames => new[] { "Modified", "IsModified" };
-
-    protected override string[] ProjectPathPropertyNames => new[] { "FilePath", "Path", "ProjectPath" };
-
-    public override bool CanHandle(TiaPortalRuntimeInfo runtime)
-    {
-        return TryParseVersion(runtime.Version, 16);
-    }
-
-    private static bool TryParseVersion(string version, int expected)
-    {
-        return int.TryParse(version.TrimStart('V', 'v'), out var parsed) && parsed == expected;
-    }
-}
-
-internal sealed class V17OpennessVersionProvider : OpennessVersionProviderBase
-{
-    public override bool CanHandle(TiaPortalRuntimeInfo runtime)
-    {
-        return TryParseVersion(runtime.Version, 17);
-    }
-
-    private static bool TryParseVersion(string version, int expected)
-    {
-        return int.TryParse(version.TrimStart('V', 'v'), out var parsed) && parsed == expected;
-    }
-}
-
-internal sealed class V18OpennessVersionProvider : OpennessVersionProviderBase
-{
-    public override bool CanHandle(TiaPortalRuntimeInfo runtime)
-    {
-        return TryParseVersion(runtime.Version, 18);
-    }
-
-    private static bool TryParseVersion(string version, int expected)
-    {
-        return int.TryParse(version.TrimStart('V', 'v'), out var parsed) && parsed == expected;
-    }
-}
-
-internal sealed class V19OpennessVersionProvider : OpennessVersionProviderBase
-{
-    public override bool CanHandle(TiaPortalRuntimeInfo runtime)
-    {
-        return TryParseVersion(runtime.Version, 19);
-    }
-
-    private static bool TryParseVersion(string version, int expected)
-    {
-        return int.TryParse(version.TrimStart('V', 'v'), out var parsed) && parsed == expected;
-    }
-}
-
-internal sealed class LatestOpennessVersionProvider : OpennessVersionProviderBase
-{
-    protected override string[] ProjectPathPropertyNames => new[] { "Path", "ProjectPath", "FilePath", "Location" };
-
-    protected override string[] ArchiveModeNames => new[] { "Compressed", "Default" };
-
-    public override bool CanHandle(TiaPortalRuntimeInfo runtime)
-    {
-        return TryParseVersion(runtime.Version, out var version) && version >= 20;
-    }
-
-    private static bool TryParseVersion(string version, out int parsed)
-    {
-        return int.TryParse(version.TrimStart('V', 'v'), out parsed);
     }
 }

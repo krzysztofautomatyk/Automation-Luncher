@@ -25,6 +25,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="AutomationLauncherSettings.cs" />
+    <Compile Remove="ProtectedApplicationSettingsStore.cs" />
+
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

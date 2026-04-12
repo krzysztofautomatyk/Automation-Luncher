@@ -50,18 +50,20 @@ public partial class StartupSequenceSplashWindow : Window
         BackgroundImage.Source = bitmap;
     }
 
-    public void ConfigureActions(bool showConfirmAction, string? confirmButtonText, string cancelButtonText)
+    public void ConfigureActions(bool showConfirmAction, string? confirmButtonText, string? cancelButtonText, bool showCancelAction = true)
     {
         ConfirmActionButton.Visibility = showConfirmAction ? Visibility.Visible : Visibility.Collapsed;
+        CancelActionButton.Visibility = showCancelAction ? Visibility.Visible : Visibility.Collapsed;
 
         if (!string.IsNullOrWhiteSpace(confirmButtonText))
         {
             ConfirmActionButton.Content = confirmButtonText;
         }
 
-        CancelActionButton.Content = string.IsNullOrWhiteSpace(cancelButtonText)
-            ? "Cancel"
-            : cancelButtonText;
+        if (!string.IsNullOrWhiteSpace(cancelButtonText))
+        {
+            CancelActionButton.Content = cancelButtonText;
+        }
     }
 
     public void ConfigureConfirmDialog(string confirmationMessage)

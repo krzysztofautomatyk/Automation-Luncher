@@ -4,7 +4,7 @@ namespace AutomationLauncher.App;
 
 public static class AppVersionInfo
 {
-    public const string ProductVersion = "10.0.0";
+    public const string ProductVersion = "1.0.0";
 
     public static string DisplayVersion
     {

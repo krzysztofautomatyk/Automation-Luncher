@@ -1,0 +1,704 @@
+<Window x:Class="AutomationLauncher.App.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Automation Launcher - Settings"
+        Width="980"
+        Height="760"
+        MinWidth="860"
+        MinHeight="680"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="#F4F7F8">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Padding="18" Background="#0D1B2A" CornerRadius="12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Protected Settings"
+                               Foreground="White"
+                               FontSize="24"
+                               FontWeight="SemiBold" />
+                    <TextBlock Margin="0,8,0,0"
+                               Foreground="#D8E2EA"
+                               Text="Section-based configuration for TIA access, archive workflow, startup automation, and logging." />
+                    <TextBlock Margin="0,8,0,0"
+                               Foreground="#BFD4E2"
+                               FontWeight="SemiBold"
+                               Text="{Binding AppVersion, StringFormat=Version {0}}" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <TextBlock Foreground="#D8E2EA"
+                               Text="{Binding SettingsStatusMessage}"
+                               TextWrapping="Wrap"
+                               MaxWidth="360"
+                               TextAlignment="Right" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1" Margin="0,16,0,0" CornerRadius="12" Background="White" Padding="10">
+            <TabControl TabStripPlacement="Left" Background="Transparent" BorderThickness="0">
+                <TabControl.Resources>
+                    <Style TargetType="TabItem">
+                        <Setter Property="Margin" Value="0,0,0,8" />
+                        <Setter Property="Padding" Value="14,12" />
+                        <Setter Property="MinWidth" Value="210" />
+                    </Style>
+                </TabControl.Resources>
+
+                <TabItem Header="TIA and Group Access">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <Border Padding="14" Background="#EEF6FF" CornerRadius="10" BorderBrush="#B8D4F0" BorderThickness="1">
+                                <TextBlock Foreground="#123A5A"
+                                           TextWrapping="Wrap"
+                                           Text="Start here: verify the active TIA runtime, then validate Windows access to the local Siemens Openness group. Session controls are separated to the Session tab so the first screen stays focused on connection readiness." />
+                            </Border>
+
+                            <Border Margin="0,10,0,0" Padding="14" Background="#FFFBF0" CornerRadius="10" BorderBrush="#F0D080" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock FontWeight="SemiBold" Foreground="#7A5500"
+                                               Text="Known warning — Siemens.Engineering.Contract assembly load failure" />
+                                    <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Foreground="#5A3E00"
+                                               Text="If the log contains 'Could not load file or assembly Siemens.Engineering.Contract, Version=19.0.0.0 / MissingMethodException: Assembly.Load(Byte[], Byte[], SecurityContextSource)', this is a known TIA Portal V19 Openness assembly incompatibility with the .NET runtime host used by the reflection probe." />
+                                    <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#5A3E00">
+                                        <Run FontWeight="SemiBold">What to check:</Run>
+                                        <Run>1) The application .exe must run under .NET Framework 4.8 — not .NET 6/7/8. </Run>
+                                        <Run>2) Confirm the selected TIA runtime in the panel below matches the installed TIA Portal version. </Run>
+                                        <Run>3) If TIA V19 is installed alongside an older version, select the matching provider explicitly (not Auto). </Run>
+                                        <Run>4) After correcting the runtime selection, restart the application and use "Check communication with TIA" to re-verify.</Run>
+                                    </TextBlock>
+                                    <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#5A3E00">
+                                        <Run FontWeight="SemiBold">Openness group:</Run>
+                                        <Run>This warning does not block archive operations. However, "User in group" and "Membership result" will remain inconclusive until the assembly loads successfully. Use "Repair automatically (UAC)" if the user is not a member of the Siemens TIA Openness local group.</Run>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Margin="0,14,0,0" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.ColumnSpan="3" Text="TIA Portal runtime" FontSize="20" FontWeight="Bold" Foreground="#0D1B2A" />
+
+                                    <TextBlock Grid.Row="1" Margin="0,12,0,0" Text="TIA selection mode" FontWeight="SemiBold" />
+                                    <ComboBox Grid.Row="1" Grid.Column="1" Margin="0,12,10,0" Padding="8" ItemsSource="{Binding TiaRuntimeSelectionModes}" SelectedItem="{Binding TiaRuntimeSelectionMode}" />
+
+                                    <TextBlock Grid.Row="2" Margin="0,12,0,0" Text="Preferred TIA runtime" FontWeight="SemiBold" />
+                                    <ComboBox Grid.Row="2" Grid.Column="1" Margin="0,12,10,0" Padding="8" ItemsSource="{Binding AvailableTiaRuntimes}" SelectedItem="{Binding SelectedTiaRuntime}" />
+
+                                    <TextBlock Grid.Row="3" Margin="0,12,0,0" Text="Runtime catalog" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,12,0,0" Text="{Binding RuntimeCatalogStatus}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="4" Margin="0,12,0,0" Text="Detected process version" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,12,0,0" Text="{Binding DetectedProcessVersion}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="5" Margin="0,12,0,0" Text="Selected runtime" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,12,0,0" Text="{Binding SelectedRuntimeVersion}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="6" Margin="0,12,0,0" Text="Selected provider" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,12,0,0" Text="{Binding SelectedProviderName}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="7" Margin="0,12,0,0" Text="Assembly path" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,12,0,0" Text="{Binding SelectedAssemblyPath}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="8" Margin="0,12,0,0" Text="Runtime decision" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,12,0,0" Text="{Binding RuntimeSelectionReason}" TextWrapping="Wrap" />
+
+                                    <StackPanel Grid.Row="9" Grid.ColumnSpan="3" Margin="0,16,0,0" Orientation="Horizontal">
+                                        <Button Height="36"
+                                                Width="220"
+                                                Margin="0,0,10,0"
+                                                Content="Check communication with TIA"
+                                                Background="#1A6B3A"
+                                                Foreground="White"
+                                                BorderBrush="#1A6B3A"
+                                                Command="{Binding CheckTiaConnectionCommand}" />
+                                        <Button Height="36"
+                                                Width="180"
+                                                Content="Sync project from TIA"
+                                                Command="{Binding SyncProjectFromTiaCommand}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <Border Margin="0,14,0,0" Padding="14" Background="#FFFDF8" CornerRadius="10" BorderBrush="#F0D9A1" BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="230" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.ColumnSpan="2" Text="Openness security group" FontSize="20" FontWeight="Bold" Foreground="#4A3200" />
+
+                                    <Border Grid.Row="1"
+                                            Grid.ColumnSpan="2"
+                                            Margin="0,12,0,0"
+                                            Padding="12"
+                                            Background="#FFF3D8"
+                                            CornerRadius="8"
+                                            BorderBrush="#F0D9A1"
+                                            BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock FontWeight="SemiBold" Foreground="#6A4E21" Text="Live access status" />
+                                            <TextBlock Margin="0,4,0,0" Text="{Binding OpennessAccessActionMessage}" TextWrapping="Wrap" />
+                                            <ProgressBar Margin="0,10,0,0" Height="8" IsIndeterminate="True">
+                                                <ProgressBar.Style>
+                                                    <Style TargetType="ProgressBar">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsCheckingOpennessAccess}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ProgressBar.Style>
+                                            </ProgressBar>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <TextBlock Grid.Row="2" Margin="0,12,0,0" Text="Current user" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,12,0,0" Text="{Binding CurrentWindowsUser}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="3" Margin="0,10,0,0" Text="Resolved account" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,10,0,0" Text="{Binding ResolvedWindowsAccount}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="4" Margin="0,10,0,0" Text="Check scope" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,10,0,0" Text="{Binding OpennessCheckScope}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="5" Margin="0,10,0,0" Text="Is administrator" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="5" Grid.Column="1" Margin="0,10,0,0" Text="{Binding IsCurrentUserAdministrator}" />
+
+                                    <TextBlock Grid.Row="6" Margin="0,10,0,0" Text="Group available" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="6" Grid.Column="1" Margin="0,10,0,0" Text="{Binding IsOpennessGroupAvailable}" />
+
+                                    <TextBlock Grid.Row="7" Margin="0,10,0,0" Text="User in group" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="7" Grid.Column="1" Margin="0,10,0,0" Text="{Binding IsCurrentUserInOpennessGroup}" />
+
+                                    <TextBlock Grid.Row="8" Margin="0,10,0,0" Text="Group used for check" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="8" Grid.Column="1" Margin="0,10,0,0" Text="{Binding ResolvedOpennessGroupName}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="9" Margin="0,10,0,0" Text="Related local groups" FontWeight="SemiBold" />
+                                    <Border Grid.Row="9" Grid.Column="1" Margin="0,10,0,0" Padding="6" Background="#FFFFFF" CornerRadius="8" BorderBrush="#E6D6A4" BorderThickness="1">
+                                        <ListBox MaxHeight="120" BorderThickness="0" ItemsSource="{Binding OpennessRelatedLocalGroups}" />
+                                    </Border>
+
+                                    <TextBlock Grid.Row="10" Margin="0,10,0,0" Text="Discovery summary" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="10" Grid.Column="1" Margin="0,10,0,0" Text="{Binding OpennessGroupDiscoverySummary}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="11" Margin="0,10,0,0" Text="Last check" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="11" Grid.Column="1" Margin="0,10,0,0" Text="{Binding LastOpennessAccessCheck}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="12" Margin="0,10,0,0" Text="Membership result" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="12" Grid.Column="1" Margin="0,10,0,0" Text="{Binding OpennessGroupStatus}" TextWrapping="Wrap" FontWeight="SemiBold">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#222222" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsCurrentUserInOpennessGroup}" Value="True">
+                                                        <Setter Property="Foreground" Value="#1A6B3A" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsCurrentUserInOpennessGroup}" Value="False">
+                                                        <Setter Property="Foreground" Value="#B23B3B" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+
+                                    <StackPanel Grid.Row="13" Grid.ColumnSpan="2" Margin="0,16,0,0" Orientation="Horizontal">
+                                        <Button Width="190"
+                                                Height="36"
+                                                Margin="0,0,10,0"
+                                                Content="Check group access"
+                                                IsEnabled="{Binding CanCheckOpennessGroupAccess}"
+                                                Command="{Binding CheckOpennessGroupAccessCommand}" />
+                                        <Button Width="230"
+                                                Height="36"
+                                                Content="Repair automatically (UAC)"
+                                                Background="#8E4D00"
+                                                Foreground="White"
+                                                BorderBrush="#8E4D00"
+                                                Command="{Binding RepairOpennessGroupMembershipCommand}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <TextBlock Margin="0,10,0,0"
+                                       Foreground="#6A4E21"
+                                       TextWrapping="Wrap"
+                                       Text="The target group is checked on the local machine. After adding a user to the local security group, sign out and sign in again or restart Windows to refresh the access token." />
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="Archive">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <Border Padding="14" Background="#EEF6FF" CornerRadius="10" BorderBrush="#B8D4F0" BorderThickness="1">
+                                <TextBlock Foreground="#123A5A"
+                                           TextWrapping="Wrap"
+                                           Text="Configure the TIA project path and archive output directory. Select a backup retention strategy and how the application handles unsaved changes before archiving." />
+                            </Border>
+
+                            <Border Margin="0,10,0,0" Padding="12" Background="#FFFBF0" CornerRadius="10" BorderBrush="#F0D080" BorderThickness="1">
+                                <TextBlock Foreground="#5A3E00"
+                                           TextWrapping="Wrap"
+                                           Text="Instruction: if logs show Siemens.Engineering.Contract v19 load errors (MissingMethodException), switch to matching TIA runtime/provider in the TIA tab and re-run communication check." />
+                            </Border>
+
+                            <Border Margin="0,14,0,0" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.ColumnSpan="3" Text="Archive configuration" FontSize="20" FontWeight="Bold" Foreground="#0D1B2A" />
+
+                                    <TextBlock Grid.Row="1" Margin="0,12,0,0" Text="Project path" FontWeight="SemiBold" />
+                                    <TextBox Grid.Row="1" Grid.Column="1" Margin="0,12,10,0" Padding="8" Text="{Binding ExpectedProjectPath}">
+                                        <TextBox.Style>
+                                            <Style TargetType="TextBox">
+                                                <Setter Property="IsReadOnly" Value="True" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsExpectedProjectPathManualEditEnabled}" Value="True">
+                                                        <Setter Property="IsReadOnly" Value="False" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBox.Style>
+                                    </TextBox>
+                                    <Button Grid.Row="1" Grid.Column="2" Margin="0,12,0,0" Width="90" Content="Browse" Command="{Binding BrowseProjectFileCommand}" IsEnabled="{Binding IsExpectedProjectPathManualEditEnabled}" />
+
+                                    <TextBlock Grid.Row="2" Margin="0,12,0,0" Text="Archive directory" FontWeight="SemiBold" />
+                                    <TextBox Grid.Row="2" Grid.Column="1" Margin="0,12,10,0" Padding="8" Text="{Binding ArchiveOutputDirectory}" />
+                                    <Button Grid.Row="2" Grid.Column="2" Margin="0,12,0,0" Width="90" Content="Browse" Command="{Binding BrowseArchiveDirectoryCommand}" />
+
+                                    <TextBlock Grid.Row="3" Margin="0,12,0,0" Text="Backup flow" FontWeight="SemiBold" />
+                                    <ComboBox Grid.Row="3" Grid.Column="1" Margin="0,12,10,0" Padding="8" ItemsSource="{Binding ArchiveBackupFlows}" SelectedItem="{Binding SelectedArchiveBackupFlow}" />
+
+                                    <TextBlock Grid.Row="4" Margin="0,12,0,0" Text="Successful backup retention" FontWeight="SemiBold" />
+                                    <TextBox Grid.Row="4" Grid.Column="1" Margin="0,12,10,0" Padding="8" IsEnabled="{Binding IsTimestampedBackupFlowSelected}" Text="{Binding SuccessfulBackupRetentionCount}" />
+                                    <TextBlock Grid.Row="4" Grid.Column="2" Margin="0,12,0,0" VerticalAlignment="Center" Foreground="#5B6A72" Text="0 = keep all" />
+
+                                    <TextBlock Grid.Row="5"
+                                               Grid.ColumnSpan="3"
+                                               Margin="0,12,0,0"
+                                               Foreground="#5B6A72"
+                                               TextWrapping="Wrap"
+                                               Text="TimestampedRetention creates HOST_automaticBackup_yyyyMMdd_HHmmss.zapxx and can delete older successful backups. StableFileWithOld writes HOST_automaticBackup.zapxx and keeps _old on failure." />
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="Startup">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <Border Padding="14" Background="#EEF6FF" CornerRadius="10" BorderBrush="#B8D4F0" BorderThickness="1">
+                                <TextBlock Foreground="#123A5A"
+                                           TextWrapping="Wrap"
+                                           Text="Configure Windows autostart behavior and the startup sequence that launches applications automatically when the launcher starts." />
+                            </Border>
+
+                            <Border Margin="0,10,0,0" Padding="12" Background="#FFFBF0" CornerRadius="10" BorderBrush="#F0D080" BorderThickness="1">
+                                <TextBlock Foreground="#5A3E00"
+                                           TextWrapping="Wrap"
+                                           Text="Instruction: if logs show Siemens.Engineering.Contract v19 load errors (MissingMethodException), switch to matching TIA runtime/provider in the TIA tab and re-run communication check." />
+                            </Border>
+
+                            <Border Margin="0,14,0,0" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.ColumnSpan="3" Text="Windows autostart" FontSize="20" FontWeight="Bold" Foreground="#0D1B2A" />
+
+                                    <TextBlock Grid.Row="1" Margin="0,12,0,0" Text="Launch on Windows startup" FontWeight="SemiBold" />
+                                    <CheckBox Grid.Row="1" Grid.Column="1" VerticalAlignment="Center" Margin="0,12,0,0" IsChecked="{Binding LaunchOnWindowsStartup}" Content="Create application startup entry" />
+
+                                    <TextBlock Grid.Row="2" Margin="0,12,0,0" Text="Startup folder" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,12,10,0" Text="{Binding StartupFolderPath}" TextWrapping="Wrap" />
+                                    <Button Grid.Row="2" Grid.Column="2" Margin="0,12,0,0" Width="140" Content="Open folder" Command="{Binding OpenStartupFolderCommand}" />
+                                </Grid>
+                            </Border>
+
+                            <Border Margin="0,14,0,0" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="150" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.ColumnSpan="2" Text="Windows startup automation" FontSize="20" FontWeight="Bold" Foreground="#0D1B2A" />
+
+                                    <CheckBox Grid.Row="1" Grid.ColumnSpan="2" Margin="0,12,0,0" IsChecked="{Binding RunStartupSequenceOnWindowsStartup}" Content="Run startup sequence automatically when app starts from autostart" />
+
+                                    <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Margin="0,16,0,0" Text="Splash background image" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <Grid Grid.Row="3" Grid.ColumnSpan="2" Margin="0,8,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Grid.Column="0" Margin="0,0,10,0" Padding="8" MinWidth="240" Text="{Binding StartupSplashBackgroundImagePath}" />
+                                        <Button Grid.Column="1" Width="90" Content="Browse" Command="{Binding BrowseStartupSplashBackgroundCommand}" />
+                                        <Button Grid.Column="2" Width="90" Margin="10,0,0,0" Content="Clear" Command="{Binding ClearStartupSplashBackgroundCommand}" />
+                                    </Grid>
+
+                                    <DataGrid Grid.Row="4"
+                                              Grid.Column="0"
+                                              Margin="0,16,16,0"
+                                              AutoGenerateColumns="False"
+                                              CanUserAddRows="False"
+                                              HeadersVisibility="Column"
+                                              Height="260"
+                                              ItemsSource="{Binding StartupSequenceEntries}"
+                                              SelectedItem="{Binding SelectedStartupSequenceEntry}"
+                                              GridLinesVisibility="Horizontal"
+                                              SelectionMode="Single"
+                                              SelectionUnit="FullRow"
+                                              AlternatingRowBackground="#F8FBFF"
+                                              RowBackground="White">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Alias" Binding="{Binding Alias, UpdateSourceTrigger=LostFocus}" Width="180" />
+                                            <DataGridTextColumn Header="Application path" Binding="{Binding ExecutablePath, UpdateSourceTrigger=LostFocus}" Width="*" />
+                                            <DataGridTextColumn Header="Delay (s)" Binding="{Binding DelaySeconds, UpdateSourceTrigger=LostFocus}" Width="110" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+
+                                    <StackPanel Grid.Row="4" Grid.Column="1" Margin="0,16,0,0">
+                                        <Button Height="34" Content="Add app" Command="{Binding AddStartupSequenceEntryCommand}" />
+                                        <Button Height="34" Margin="0,10,0,0" Content="Remove" Command="{Binding RemoveSelectedStartupSequenceEntryCommand}" />
+                                        <Button Height="34" Margin="0,10,0,0" Content="Move up" Command="{Binding MoveStartupSequenceEntryUpCommand}" />
+                                        <Button Height="34" Margin="0,10,0,0" Content="Move down" Command="{Binding MoveStartupSequenceEntryDownCommand}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="Control Files">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <Border Padding="14" Background="#EEF6FF" CornerRadius="10" BorderBrush="#B8D4F0" BorderThickness="1">
+                                <TextBlock Foreground="#123A5A"
+                                           TextWrapping="Wrap"
+                                           Text="Control files are used by external orchestration to signal run, stop, start, march, and archive state transitions. Configure a dedicated folder and create a complete baseline set in one action." />
+                            </Border>
+
+                            <Border Margin="0,10,0,0" Padding="12" Background="#FFFBF0" CornerRadius="10" BorderBrush="#F0D080" BorderThickness="1">
+                                <TextBlock Foreground="#5A3E00"
+                                           TextWrapping="Wrap"
+                                           Text="Instruction: if logs show Siemens.Engineering.Contract v19 load errors (MissingMethodException), switch to matching TIA runtime/provider in the TIA tab and re-run communication check." />
+                            </Border>
+
+                            <Border Margin="0,14,0,0" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.ColumnSpan="3" Text="Control files directory and status" FontSize="20" FontWeight="Bold" Foreground="#0D1B2A" />
+
+                                    <TextBlock Grid.Row="1" Margin="0,12,0,0" Text="Control files folder" FontWeight="SemiBold" />
+                                    <TextBox Grid.Row="1" Grid.Column="1" Margin="0,12,10,0" Padding="8" Text="{Binding ControlFilesFolderPath}" />
+                                    <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,12,0,0" Orientation="Horizontal">
+                                        <Button Width="90" Height="32" Content="Browse" Command="{Binding BrowseControlFilesFolderCommand}" />
+                                        <Button Width="90" Height="32" Margin="10,0,0,0" Content="Open" Command="{Binding OpenControlFilesFolderCommand}" />
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Row="2" Margin="0,12,0,0" Text="Host state" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,12,0,0" Text="{Binding HostControlStateDisplay}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="3" Margin="0,12,0,0" Text="Run" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,12,0,0" Text="{Binding HostRunFilePath}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="4" Margin="0,8,0,0" Text="Ready" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,8,0,0" Text="{Binding HostReadyFilePath}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="5" Margin="0,8,0,0" Text="Start / Stop / March" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,8,0,0" Text="{Binding HostStartFilePath}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="6" Margin="0,8,0,0" Text="Error / Archive OK" FontWeight="SemiBold" />
+                                    <StackPanel Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,8,0,0">
+                                        <TextBlock Text="{Binding HostErrorFilePath}" TextWrapping="Wrap" />
+                                        <TextBlock Margin="0,4,0,0" Text="{Binding HostArchOkFilePath}" TextWrapping="Wrap" />
+                                    </StackPanel>
+
+                                    <Button Grid.Row="7"
+                                            Grid.ColumnSpan="3"
+                                            Margin="0,16,0,0"
+                                            Height="38"
+                                            Content="Create all control files in selected folder"
+                                            Background="#1B4965"
+                                            Foreground="White"
+                                            BorderBrush="#1B4965"
+                                            Command="{Binding CreateAllControlFilesInSelectedFolderCommand}" />
+
+                                    <TextBlock Grid.Row="8"
+                                               Grid.ColumnSpan="3"
+                                               Margin="0,10,0,0"
+                                               Foreground="#5B6A72"
+                                               TextWrapping="Wrap"
+                                               Text="Creates: .run, .ready, .error, .start, .stop, .march, and .archok files for the current host name." />
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="Logging">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <Border Padding="14" Background="#EEF6FF" CornerRadius="10" BorderBrush="#B8D4F0" BorderThickness="1">
+                                <TextBlock Foreground="#123A5A"
+                                           TextWrapping="Wrap"
+                                           Text="Configure the log file location, verbosity level, and how many rotated files to retain. Logging changes take effect after restarting the application." />
+                            </Border>
+
+                            <Border Margin="0,10,0,0" Padding="12" Background="#FFFBF0" CornerRadius="10" BorderBrush="#F0D080" BorderThickness="1">
+                                <TextBlock Foreground="#5A3E00"
+                                           TextWrapping="Wrap"
+                                           Text="Instruction: if logs show Siemens.Engineering.Contract v19 load errors (MissingMethodException), switch to matching TIA runtime/provider in the TIA tab and re-run communication check." />
+                            </Border>
+
+                            <Border Margin="0,14,0,0" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.ColumnSpan="3" Text="Logging configuration" FontSize="20" FontWeight="Bold" Foreground="#0D1B2A" />
+
+                                    <TextBlock Grid.Row="1" Margin="0,12,0,0" Text="Log directory" FontWeight="SemiBold" />
+                                    <TextBox Grid.Row="1" Grid.Column="1" Margin="0,12,10,0" Padding="8" Text="{Binding LogDirectory}" />
+                                    <Button Grid.Row="1" Grid.Column="2" Margin="0,12,0,0" Width="90" Content="Browse" Command="{Binding BrowseLogDirectoryCommand}" />
+
+                                    <TextBlock Grid.Row="2" Margin="0,12,0,0" Text="Minimum level" FontWeight="SemiBold" />
+                                    <ComboBox Grid.Row="2" Grid.Column="1" Margin="0,12,10,0" Padding="8" ItemsSource="{Binding LogLevels}" SelectedItem="{Binding LogMinimumLevel}" />
+
+                                    <TextBlock Grid.Row="3" Margin="0,12,0,0" Text="Retained file count" FontWeight="SemiBold" />
+                                    <TextBox Grid.Row="3" Grid.Column="1" Margin="0,12,10,0" Padding="8" Text="{Binding LogRetentionFileCount}" />
+
+                                    <Button Grid.Row="4" Grid.ColumnSpan="3" Margin="0,16,0,0" Height="38" Content="Open log folder" Command="{Binding OpenLogDirectoryCommand}" />
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="Settings Exchange">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <Border Padding="14" Background="#EEF6FF" CornerRadius="10" BorderBrush="#B8D4F0" BorderThickness="1">
+                                <TextBlock Foreground="#123A5A"
+                                           TextWrapping="Wrap"
+                                           Text="Export protected settings to a JSON file for backup or migration, or import a previously exported JSON file to restore configuration." />
+                            </Border>
+
+                            <Border Margin="0,10,0,0" Padding="12" Background="#FFFBF0" CornerRadius="10" BorderBrush="#F0D080" BorderThickness="1">
+                                <TextBlock Foreground="#5A3E00"
+                                           TextWrapping="Wrap"
+                                           Text="Instruction: if logs show Siemens.Engineering.Contract v19 load errors (MissingMethodException), switch to matching TIA runtime/provider in the TIA tab and re-run communication check." />
+                            </Border>
+
+                            <Border Margin="0,14,0,0" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.ColumnSpan="4" Text="Settings exchange" FontSize="20" FontWeight="Bold" Foreground="#0D1B2A" />
+
+                                    <TextBlock Grid.Row="1" VerticalAlignment="Center" Margin="0,16,0,0" Text="Import / Export" FontWeight="SemiBold" />
+
+                                    <TextBlock Grid.Row="1" Grid.Column="1"
+                                               Margin="0,16,16,0"
+                                               VerticalAlignment="Center"
+                                               Foreground="#5B6A72"
+                                               Text="Export current configuration to JSON or import JSON back into the protected settings store." />
+
+                                    <Button Grid.Row="1" Grid.Column="2"
+                                            Width="120"
+                                            Height="34"
+                                            Margin="0,16,10,0"
+                                            Content="Export"
+                                            Command="{Binding ExportSettingsCommand}" />
+
+                                    <Button Grid.Row="1" Grid.Column="3"
+                                            Width="120"
+                                            Height="34"
+                                            Margin="0,16,0,0"
+                                            Content="Import"
+                                            Command="{Binding ImportSettingsCommand}" />
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="Session">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <Border Padding="14" Background="#EEF6FF" CornerRadius="10" BorderBrush="#B8D4F0" BorderThickness="1">
+                                <TextBlock Foreground="#123A5A"
+                                           TextWrapping="Wrap"
+                                           Text="Manage the active session, monitor timeout, and view protected settings file location." />
+                            </Border>
+
+                            <Border Margin="0,10,0,0" Padding="12" Background="#FFFBF0" CornerRadius="10" BorderBrush="#F0D080" BorderThickness="1">
+                                <TextBlock Foreground="#5A3E00"
+                                           TextWrapping="Wrap"
+                                           Text="Instruction: if logs show Siemens.Engineering.Contract v19 load errors (MissingMethodException), switch to matching TIA runtime/provider in the TIA tab and re-run communication check." />
+                            </Border>
+
+                            <Border Margin="0,14,0,0" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.ColumnSpan="4" Text="Session and application info" FontSize="20" FontWeight="Bold" Foreground="#0D1B2A" />
+
+                                    <TextBlock Grid.Row="1" Margin="0,12,0,0" Text="Host name" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,12,0,0" Text="{Binding HostName}" />
+
+                                    <TextBlock Grid.Row="2" Margin="0,10,0,0" Text="Protected settings file" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,10,0,0" Text="{Binding SettingsFilePath}" TextWrapping="Wrap" />
+
+                                    <TextBlock Grid.Row="3" Margin="0,10,0,0" Text="Session timeout" FontWeight="SemiBold" />
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,10,16,0" VerticalAlignment="Center" FontSize="16" FontWeight="SemiBold" Text="{Binding SessionTimeRemaining}" />
+                                    <Button Grid.Row="3" Grid.Column="2" Margin="0,10,10,0" Width="110" Height="34" Content="Reset timer" Command="{Binding ResetSessionTimerCommand}" />
+                                    <Button Grid.Row="3" Grid.Column="3" Margin="0,10,0,0" Width="90" Height="34" Content="Log out" Command="{Binding LogoutSessionCommand}" />
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+            </TabControl>
+        </Border>
+
+        <StackPanel Grid.Row="2" Margin="0,16,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Width="140"
+                    Height="36"
+                    Margin="0,0,10,0"
+                    Content="Apply settings"
+                    Background="#1B4965"
+                    Foreground="White"
+                    BorderBrush="#1B4965"
+                    Command="{Binding ApplySettingsCommand}" />
+            <Button Width="120"
+                    Height="36"
+                    Content="Close"
+                    Click="Close_Click" />
+        </StackPanel>
+    </Grid>
+</Window>
