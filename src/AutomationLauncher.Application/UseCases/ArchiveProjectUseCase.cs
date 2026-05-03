@@ -71,9 +71,82 @@ public sealed class ArchiveProjectUseCase
                     runtimeContext: context);
             }
 
-                    var projectSizeBytes = TryGetPathSizeBytes(actualProject);
+            // ── Step 1: Verify PLC is ONLINE ──────────────────────────────
+            _logger.OnlineStateCheckAttempted(correlationId, sessionId);
+            var onlineState = await _tiaPortalGateway.CheckOnlineStateAsync(
+                sessionId,
+                TimeSpan.FromSeconds(options.OnlineStateCheckTimeoutSeconds),
+                cancellationToken);
+            _logger.OnlineStateCheckCompleted(correlationId, onlineState);
 
-            var shouldSave = DetermineShouldSave(context, options, out var saveReason);
+            if (!onlineState.Checked)
+            {
+                var diagMsg = string.IsNullOrWhiteSpace(onlineState.DiagnosticMessage)
+                    ? "Online state check could not be completed. Proceeding with archive."
+                    : $"Online state check could not be completed. {onlineState.DiagnosticMessage} Proceeding with archive.";
+
+                _logger.TiaDiagnostic(correlationId, "OnlineStateCheckSkipped", diagMsg);
+            }
+            else if (!onlineState.HasOnlineDevices)
+            {
+                _logger.TiaDiagnostic(correlationId, "PlcNotOnlineSkipped",
+                    $"No online PLC devices detected (count={onlineState.OnlineDeviceCount}). " +
+                    "Online state may not be reliably detectable for this TIA version. Proceeding with archive.");
+            }
+
+            // ── Step 2: Compare online vs offline 1:1 ─────────────────────
+            _logger.PlcComparisonAttempted(correlationId, sessionId);
+            var plcComparison = await _tiaPortalGateway.CompareOnlineOfflineAsync(
+                sessionId,
+                TimeSpan.FromSeconds(options.PlcComparisonTimeoutSeconds),
+                cancellationToken);
+            _logger.PlcComparisonCompleted(correlationId, plcComparison);
+
+            if (!plcComparison.Verified)
+            {
+                var message = string.IsNullOrWhiteSpace(plcComparison.DiagnosticMessage)
+                    ? "PLC online/offline comparison could not be verified. Proceeding with archive."
+                    : $"PLC online/offline comparison could not be verified. {plcComparison.DiagnosticMessage} Proceeding with archive.";
+
+                _logger.TiaDiagnostic(correlationId, "PlcComparisonSkipped", message);
+            }
+            else if (!plcComparison.IsEqual)
+            {
+                return new ArchiveResult(
+                    ArchiveOutcome.PlcComparisonMismatch,
+                    "PLC online/offline comparison detected differences. Online and offline versions are not 1:1. Archive was blocked.",
+                    runtimeContext: context);
+            }
+
+            // ── Step 3: Go offline ────────────────────────────────────────
+            _logger.GoOfflineAttempted(correlationId, sessionId);
+            var goOffline = await _tiaPortalGateway.GoOfflineAsync(
+                sessionId,
+                TimeSpan.FromSeconds(options.GoOfflineTimeoutSeconds),
+                cancellationToken);
+            _logger.GoOfflineCompleted(correlationId, goOffline);
+
+            if (!goOffline.Success)
+            {
+                var offlineMessage = string.IsNullOrWhiteSpace(goOffline.DiagnosticMessage)
+                    ? "Failed to switch PLC devices to offline mode."
+                    : $"Failed to switch PLC devices to offline mode. {goOffline.DiagnosticMessage}";
+
+                if (goOffline.DevicesSetOffline == 0 && goOffline.DevicesProcessed > 0)
+                {
+                    return new ArchiveResult(ArchiveOutcome.GoOfflineFailed, offlineMessage, runtimeContext: context);
+                }
+
+                _logger.TiaDiagnostic(correlationId, "GoOfflinePartial", offlineMessage);
+            }
+
+            // ── Step 4: Save project ──────────────────────────────────────
+            // Re-read context after going offline to get fresh unsaved state
+            var refreshedContext = await _tiaPortalGateway.GetCurrentContextAsync(cancellationToken);
+
+            var projectSizeBytes = TryGetPathSizeBytes(actualProject);
+
+            var shouldSave = DetermineShouldSave(refreshedContext, options, out var saveReason);
             _logger.SaveAttempted(correlationId, shouldSave, saveReason);
             if (shouldSave)
             {
@@ -126,7 +199,10 @@ public sealed class ArchiveProjectUseCase
                         actualProject,
                         projectSizeBytes,
                         TryGetPathSizeBytes(archivePath),
-                        duration);
+                        duration,
+                        options.PreSaveAttempted,
+                        options.PreSaveSucceeded,
+                        options.PreSaveTriggerSource);
                     return new ArchiveResult(ArchiveOutcome.Success, "Archive completed successfully.", archivePath, duration, context);
                 }
 
@@ -228,7 +304,10 @@ public sealed class ArchiveProjectUseCase
         string projectPath,
         long? projectSizeBytes,
         long? archiveSizeBytes,
-        TimeSpan duration)
+        TimeSpan duration,
+        bool preSaveAttempted = false,
+        bool? preSaveSucceeded = null,
+        string? preSaveTriggerSource = null)
     {
         try
         {
@@ -241,21 +320,32 @@ public sealed class ArchiveProjectUseCase
             Directory.CreateDirectory(outputDirectory);
             var archiveBaseName = Path.GetFileNameWithoutExtension(archivePath);
             var metricsLogPath = Path.Combine(outputDirectory, $"{archiveBaseName}.archive.log");
-            var content = new StringBuilder()
+            var sb = new StringBuilder()
                 .AppendLine("Archive Metrics")
                 .AppendLine($"CorrelationId={correlationId}")
                 .AppendLine($"StartedAt={startedAt:O}")
                 .AppendLine($"ProjectPath={projectPath}")
                 .AppendLine($"ProjectSizeBytes={FormatBytesValue(projectSizeBytes)}")
-                .AppendLine($"ProjectSizeMB={FormatMegabytesValue(projectSizeBytes)}")
-                .AppendLine($"FinishedAt={finishedAt:O}")
-                .AppendLine($"ArchivePath={archivePath}")
-                .AppendLine($"ArchiveSizeBytes={FormatBytesValue(archiveSizeBytes)}")
-                .AppendLine($"ArchiveSizeMB={FormatMegabytesValue(archiveSizeBytes)}")
-                .AppendLine($"DurationMs={duration.TotalMilliseconds.ToString("F0", CultureInfo.InvariantCulture)}")
-                .ToString();
+                .AppendLine($"ProjectSizeMB={FormatMegabytesValue(projectSizeBytes)}");
 
-            File.WriteAllText(metricsLogPath, content);
+            if (preSaveAttempted)
+            {
+                sb.AppendLine($"PreSaveAttempted=true")
+                  .AppendLine($"PreSaveTriggerSource={preSaveTriggerSource ?? "Unknown"}")
+                  .AppendLine($"PreSaveSucceeded={preSaveSucceeded?.ToString() ?? "N/A"}");
+            }
+            else
+            {
+                sb.AppendLine("PreSaveAttempted=false");
+            }
+
+            sb.AppendLine($"FinishedAt={finishedAt:O}")
+              .AppendLine($"ArchivePath={archivePath}")
+              .AppendLine($"ArchiveSizeBytes={FormatBytesValue(archiveSizeBytes)}")
+              .AppendLine($"ArchiveSizeMB={FormatMegabytesValue(archiveSizeBytes)}")
+              .AppendLine($"DurationMs={duration.TotalMilliseconds.ToString("F0", CultureInfo.InvariantCulture)}");
+
+            File.WriteAllText(metricsLogPath, sb.ToString());
         }
         catch
         {

@@ -72,6 +72,40 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ShowFlow_Click(object sender, RoutedEventArgs e)
+    {
+        const string flowDescription =
+            "Automation Launcher - Full archive flow\n\n" +
+            "1) Trigger\n" +
+            "- Archive can start from dashboard, tray menu, or HOST control file (.march).\n" +
+            "- If another workflow is already running, archive command is ignored.\n\n" +
+            "2) Countdown splash (60s)\n" +
+            "- User can click 'Archive now' to skip waiting.\n" +
+            "- User can cancel archive and provide a reason.\n\n" +
+            "3) Pre-save phase (if needed)\n" +
+            "- If unsaved changes are detected (or fallback policy requires it), 30s save countdown starts.\n" +
+            "- 'Save now' forces immediate save.\n" +
+            "- 'Skip save' disables pre-save for this run.\n\n" +
+            "4) Runtime validation\n" +
+            "- TIA process and open project are read via Openness.\n" +
+            "- Open project path must match configured expected path.\n" +
+            "- PLC online/offline compare gate must be verified and equal (1:1).\n" +
+            "- If compare is unavailable or mismatched, archive is blocked.\n\n" +
+            "5) Save + archive execution\n" +
+            "- Save runs according to policy (dirty-state aware).\n" +
+            "- Archive is created with configured backup mode and retry policy.\n\n" +
+            "6) Results and control files\n" +
+            "- Success creates .archok and clears .error.\n" +
+            "- Failure creates .error and keeps host state in Error.\n" +
+            "- Structured logs are written to app logs and archive metrics log (*.archive.log).";
+
+        System.Windows.MessageBox.Show(
+            flowDescription,
+            "Automation Launcher - Flow",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
     private async void ArchiveNow_Click(object sender, RoutedEventArgs e)
     {
         if (System.Windows.Application.Current is App app)

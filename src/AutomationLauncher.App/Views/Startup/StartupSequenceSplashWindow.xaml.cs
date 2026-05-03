@@ -22,6 +22,8 @@ public partial class StartupSequenceSplashWindow : Window
     public event EventHandler? ConfirmRequested;
     public event EventHandler? CancellationDialogOpened;
     public event EventHandler? CancellationDialogClosed;
+    public event EventHandler? SaveNowRequested;
+    public event EventHandler? SkipSaveRequested;
 
     public void SetApplicationTitle(string title)
     {
@@ -64,6 +66,32 @@ public partial class StartupSequenceSplashWindow : Window
         {
             CancelActionButton.Content = cancelButtonText;
         }
+    }
+
+    public void SetSaveStatus(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            SaveStatusText.Visibility = Visibility.Collapsed;
+            SaveStatusText.Text = string.Empty;
+        }
+        else
+        {
+            SaveStatusText.Text = message;
+            SaveStatusText.Visibility = Visibility.Visible;
+        }
+    }
+
+    public void ConfigureSaveAction(bool visible, string? saveText, string? skipText)
+    {
+        SaveNowButton.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        SkipSaveButton.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+
+        if (!string.IsNullOrWhiteSpace(saveText))
+            SaveNowButton.Content = saveText;
+
+        if (!string.IsNullOrWhiteSpace(skipText))
+            SkipSaveButton.Content = skipText;
     }
 
     public void ConfigureConfirmDialog(string confirmationMessage)
@@ -121,6 +149,16 @@ public partial class StartupSequenceSplashWindow : Window
         {
             CancellationDialogClosed?.Invoke(this, EventArgs.Empty);
         }
+    }
+
+    private void SaveNow_Click(object sender, RoutedEventArgs e)
+    {
+        SaveNowRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void SkipSave_Click(object sender, RoutedEventArgs e)
+    {
+        SkipSaveRequested?.Invoke(this, EventArgs.Empty);
     }
 
     private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

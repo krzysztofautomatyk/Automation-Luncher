@@ -9,6 +9,12 @@ public interface IOpennessVersionProvider
 
     TiaProjectContext TryReadOpenProject(Assembly assembly, int processId, TiaPortalRuntimeInfo runtime);
 
+    OnlineStateResult TryCheckOnlineState(Assembly assembly, string sessionId, TiaPortalRuntimeInfo runtime);
+
+    PlcOnlineOfflineComparisonResult TryCompareOnlineOffline(Assembly assembly, string sessionId, TiaPortalRuntimeInfo runtime);
+
+    GoOfflineResult TryGoOffline(Assembly assembly, string sessionId, TiaPortalRuntimeInfo runtime);
+
     bool TrySaveProject(Assembly assembly, string sessionId, TiaPortalRuntimeInfo runtime);
 
     bool TryArchiveProject(Assembly assembly, string sessionId, string destinationArchivePath, TiaPortalRuntimeInfo runtime);

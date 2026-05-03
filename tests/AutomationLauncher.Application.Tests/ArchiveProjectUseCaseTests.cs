@@ -42,6 +42,110 @@ public sealed class ArchiveProjectUseCaseTests
     }
 
     [Fact]
+    public async Task ProceedsWithArchive_WhenPlcComparisonUnavailable()
+    {
+        var context = new TiaProjectContext(true, @"C:\Projects\Target.ap19", "Target", "101", false, true);
+        var gateway = new FakeGateway(context)
+        {
+            ComparisonResult = new PlcOnlineOfflineComparisonResult(false, false, "PlcCompareUnavailable", "Compare service unavailable."),
+            ArchiveResult = true
+        };
+
+        var result = await BuildUseCase(gateway).ExecuteAsync(DefaultOptions(), CancellationToken.None);
+
+        Assert.Equal(ArchiveOutcome.Success, result.Outcome);
+        Assert.True(gateway.ArchiveCalled);
+    }
+
+    [Fact]
+    public async Task ProceedsWithArchive_WhenNoOnlineDevicesDetected()
+    {
+        var context = new TiaProjectContext(true, @"C:\Projects\Target.ap19", "Target", "101", false, true);
+        var gateway = new FakeGateway(context)
+        {
+            OnlineStateResultValue = new OnlineStateResult(true, false, 0),
+            ArchiveResult = true
+        };
+
+        var result = await BuildUseCase(gateway).ExecuteAsync(DefaultOptions(), CancellationToken.None);
+
+        Assert.Equal(ArchiveOutcome.Success, result.Outcome);
+        Assert.True(gateway.OnlineStateChecked);
+        Assert.True(gateway.ArchiveCalled);
+    }
+
+    [Fact]
+    public async Task ProceedsWithCompare_WhenOnlineStateCheckSucceeds()
+    {
+        var context = new TiaProjectContext(true, @"C:\Projects\Target.ap19", "Target", "101", false, true);
+        var gateway = new FakeGateway(context)
+        {
+            OnlineStateResultValue = new OnlineStateResult(true, true, 2),
+            ComparisonResult = new PlcOnlineOfflineComparisonResult(true, true),
+            GoOfflineResultValue = new GoOfflineResult(true, 2, 2),
+            ArchiveResult = true
+        };
+
+        var result = await BuildUseCase(gateway).ExecuteAsync(DefaultOptions(), CancellationToken.None);
+
+        Assert.Equal(ArchiveOutcome.Success, result.Outcome);
+        Assert.True(gateway.OnlineStateChecked);
+        Assert.True(gateway.GoOfflineCalled);
+        Assert.True(gateway.ArchiveCalled);
+    }
+
+    [Fact]
+    public async Task ReturnsPlcComparisonMismatch_WhenOnlineOfflineDiffer()
+    {
+        var context = new TiaProjectContext(true, @"C:\Projects\Target.ap19", "Target", "101", false, true);
+        var gateway = new FakeGateway(context)
+        {
+            ComparisonResult = new PlcOnlineOfflineComparisonResult(true, false)
+        };
+
+        var result = await BuildUseCase(gateway).ExecuteAsync(DefaultOptions(), CancellationToken.None);
+
+        Assert.Equal(ArchiveOutcome.PlcComparisonMismatch, result.Outcome);
+        Assert.False(gateway.SaveCalled);
+        Assert.False(gateway.ArchiveCalled);
+        Assert.False(gateway.GoOfflineCalled);
+    }
+
+    [Fact]
+    public async Task ReturnsGoOfflineFailed_WhenNoDevicesCouldBeSwitched()
+    {
+        var context = new TiaProjectContext(true, @"C:\Projects\Target.ap19", "Target", "101", false, true);
+        var gateway = new FakeGateway(context)
+        {
+            GoOfflineResultValue = new GoOfflineResult(false, 2, 0, "GoOfflineFailed", "All devices failed to go offline.")
+        };
+
+        var result = await BuildUseCase(gateway).ExecuteAsync(DefaultOptions(), CancellationToken.None);
+
+        Assert.Equal(ArchiveOutcome.GoOfflineFailed, result.Outcome);
+        Assert.True(gateway.GoOfflineCalled);
+        Assert.False(gateway.SaveCalled);
+        Assert.False(gateway.ArchiveCalled);
+    }
+
+    [Fact]
+    public async Task ProceedsWithArchive_WhenGoOfflineSucceeds()
+    {
+        var context = new TiaProjectContext(true, @"C:\Projects\Target.ap19", "Target", "101", false, true);
+        var gateway = new FakeGateway(context)
+        {
+            GoOfflineResultValue = new GoOfflineResult(true, 2, 1),
+            ArchiveResult = true
+        };
+
+        var result = await BuildUseCase(gateway).ExecuteAsync(DefaultOptions(), CancellationToken.None);
+
+        Assert.Equal(ArchiveOutcome.Success, result.Outcome);
+        Assert.True(gateway.GoOfflineCalled);
+        Assert.True(gateway.ArchiveCalled);
+    }
+
+    [Fact]
     public async Task ReturnsSuccess_WhenSaveAndArchiveSucceed()
     {
         var context = new TiaProjectContext(true, @"C:\Projects\Target.ap19", "Target", "101", true, true);
@@ -187,11 +291,33 @@ public sealed class ArchiveProjectUseCaseTests
 
         public bool SaveResult { get; set; } = true;
         public bool ArchiveResult { get; set; } = true;
+        public PlcOnlineOfflineComparisonResult ComparisonResult { get; set; } = new(true, true);
+        public GoOfflineResult GoOfflineResultValue { get; set; } = new(true, 1, 0);
+        public OnlineStateResult OnlineStateResultValue { get; set; } = new(true, true, 1);
         public Func<string, bool>? ArchiveHandler { get; set; }
         public bool SaveCalled { get; private set; }
         public bool ArchiveCalled { get; private set; }
+        public bool GoOfflineCalled { get; private set; }
+        public bool OnlineStateChecked { get; private set; }
 
         public Task<TiaProjectContext> GetCurrentContextAsync(CancellationToken cancellationToken) => Task.FromResult(_context);
+
+        public Task<OnlineStateResult> CheckOnlineStateAsync(string sessionId, TimeSpan timeout, CancellationToken cancellationToken)
+        {
+            OnlineStateChecked = true;
+            return Task.FromResult(OnlineStateResultValue);
+        }
+
+        public Task<PlcOnlineOfflineComparisonResult> CompareOnlineOfflineAsync(string sessionId, TimeSpan timeout, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(ComparisonResult);
+        }
+
+        public Task<GoOfflineResult> GoOfflineAsync(string sessionId, TimeSpan timeout, CancellationToken cancellationToken)
+        {
+            GoOfflineCalled = true;
+            return Task.FromResult(GoOfflineResultValue);
+        }
 
         public Task<bool> SaveProjectAsync(string sessionId, TimeSpan timeout, CancellationToken cancellationToken)
         {
@@ -239,6 +365,30 @@ public sealed class ArchiveProjectUseCaseTests
         }
 
         public void TiaDiagnostic(string correlationId, string diagnosticCode, string message)
+        {
+        }
+
+        public void OnlineStateCheckAttempted(string correlationId, string sessionId)
+        {
+        }
+
+        public void OnlineStateCheckCompleted(string correlationId, OnlineStateResult result)
+        {
+        }
+
+        public void PlcComparisonAttempted(string correlationId, string sessionId)
+        {
+        }
+
+        public void PlcComparisonCompleted(string correlationId, PlcOnlineOfflineComparisonResult result)
+        {
+        }
+
+        public void GoOfflineAttempted(string correlationId, string sessionId)
+        {
+        }
+
+        public void GoOfflineCompleted(string correlationId, GoOfflineResult result)
         {
         }
 

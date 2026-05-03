@@ -10,5 +10,9 @@ public enum ArchiveOutcome
     ArchiveFailed = 5,
     ConfigurationError = 6,
     UnexpectedError = 7,
-    TiaConnectionFailed = 8
+    TiaConnectionFailed = 8,
+    PlcComparisonUnavailable = 9,
+    PlcComparisonMismatch = 10,
+    GoOfflineFailed = 11,
+    PlcNotOnline = 12
 }

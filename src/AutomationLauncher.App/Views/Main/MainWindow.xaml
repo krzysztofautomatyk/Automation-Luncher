@@ -100,7 +100,7 @@
 
         <Border Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" Padding="16" Background="White" CornerRadius="12">
             <StackPanel>
-                <UniformGrid Columns="4">
+                <UniformGrid Columns="5">
                     <Button Margin="0,0,12,0"
                             Height="38"
                             Content="Settings"
@@ -110,6 +110,11 @@
                             Height="38"
                             Content="About"
                             Click="About_Click" />
+
+                        <Button Margin="0,0,12,0"
+                            Height="38"
+                            Content="Show full flow"
+                            Click="ShowFlow_Click" />
 
                     <Button Height="38"
                             Margin="0,0,12,0"

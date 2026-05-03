@@ -10,6 +10,11 @@ internal abstract class OpennessVersionProviderBase : IOpennessVersionProvider
     private const string GetProcessesFailedCode = "GetProcessesFailed";
     private const string AttachFailedCode = "AttachFailed";
     private const string NoProjectOpenCode = "NoProjectOpen";
+    private const string PlcCompareUnavailableCode = "PlcCompareUnavailable";
+    private const string PlcCompareInvocationFailedCode = "PlcCompareInvocationFailed";
+    private const string GoOfflineNoDevicesCode = "GoOfflineNoDevices";
+    private const string GoOfflineFailedCode = "GoOfflineFailed";
+    private const string GoOfflineOnlineProviderMissingCode = "GoOfflineOnlineProviderMissing";
 
     protected virtual string[] TiaPortalTypeNames => new[] { "Siemens.Engineering.TiaPortal" };
 
@@ -24,6 +29,10 @@ internal abstract class OpennessVersionProviderBase : IOpennessVersionProvider
     protected virtual string[] ArchiveEnumTypeNames => new[] { "Siemens.Engineering.ProjectArchivationMode" };
 
     protected virtual string[] ArchiveModeNames => new[] { "Compressed" };
+
+    protected virtual string[] SoftwareContainerTypeNames => new[] { "Siemens.Engineering.HW.Features.SoftwareContainer" };
+
+    protected virtual string[] OnlineProviderTypeNames => new[] { "Siemens.Engineering.Online.OnlineProvider" };
 
     public abstract bool CanHandle(TiaPortalRuntimeInfo runtime);
 
@@ -95,6 +104,288 @@ internal abstract class OpennessVersionProviderBase : IOpennessVersionProvider
         return new TiaProjectContext(true, pathValue, nameValue, selectedSessionId, hasUnsaved, dirtyProperty is not null, tiaVersion: runtime.Version, opennessAssemblyPath: runtime.OpennessAssemblyPath);
     }
 
+    public OnlineStateResult TryCheckOnlineState(Assembly assembly, string sessionId, TiaPortalRuntimeInfo runtime)
+    {
+        var onlineProviderType = FindType(assembly, OnlineProviderTypeNames);
+        if (onlineProviderType is null)
+        {
+            return new OnlineStateResult(false, false, 0, GoOfflineOnlineProviderMissingCode, $"OnlineProvider type not found for runtime {runtime.Version}.");
+        }
+
+        var firstProject = TryGetProject(assembly, sessionId);
+        if (firstProject is null)
+        {
+            return new OnlineStateResult(false, false, 0, NoProjectOpenCode, "No open project available for online state check.");
+        }
+
+        var devices = ReadDevices(firstProject);
+        if (devices is null || devices.Count == 0)
+        {
+            Log.Information("OnlineStateCheck: No devices found in project for session {SessionId}", sessionId);
+            return new OnlineStateResult(true, false, 0, null, "No devices found in project.");
+        }
+
+        Log.Information("OnlineStateCheck: Found {DeviceCount} device(s) in project for session {SessionId}", devices.Count, sessionId);
+
+        var onlineCount = 0;
+        foreach (var device in devices)
+        {
+            var deviceName = ReadStringProperty(device, "Name") ?? "unknown";
+            var deviceItems = ReadDeviceItems(device);
+            if (deviceItems is null)
+            {
+                Log.Information("OnlineStateCheck: Device {DeviceName} has no DeviceItems", deviceName);
+                continue;
+            }
+
+            Log.Information("OnlineStateCheck: Device {DeviceName} has {ItemCount} top-level DeviceItem(s)", deviceName, deviceItems.Count);
+
+            foreach (var deviceItem in deviceItems)
+            {
+                onlineCount += CountOnlineRecursive(deviceItem, onlineProviderType, deviceName);
+            }
+        }
+
+        Log.Information("OnlineStateCheck: Total online providers found: {OnlineCount}", onlineCount);
+        return new OnlineStateResult(true, onlineCount > 0, onlineCount);
+    }
+
+    private int CountOnlineRecursive(object deviceItem, Type onlineProviderType, string deviceName, string parentPath = "")
+    {
+        var count = 0;
+        var itemName = ReadStringProperty(deviceItem, "Name") ?? "?";
+        var path = string.IsNullOrEmpty(parentPath) ? itemName : $"{parentPath}/{itemName}";
+
+        var onlineProvider = ResolveServiceByType(deviceItem, onlineProviderType);
+        if (onlineProvider is not null)
+        {
+            var stateName = ReadOnlineState(onlineProvider);
+            var isOnline = string.Equals(stateName, "Online", StringComparison.OrdinalIgnoreCase);
+            Log.Information("OnlineStateCheck: [{DeviceName}] {ItemPath} → OnlineProvider.State={State} (online={IsOnline})",
+                deviceName, path, stateName, isOnline);
+            if (isOnline)
+            {
+                count++;
+            }
+        }
+
+        var childItems = ReadDeviceItems(deviceItem);
+        if (childItems is not null)
+        {
+            foreach (var child in childItems)
+            {
+                count += CountOnlineRecursive(child, onlineProviderType, deviceName, path);
+            }
+        }
+
+        return count;
+    }
+
+    public PlcOnlineOfflineComparisonResult TryCompareOnlineOffline(Assembly assembly, string sessionId, TiaPortalRuntimeInfo runtime)
+    {
+        var firstProject = TryGetProject(assembly, sessionId);
+        if (firstProject is null)
+        {
+            return new PlcOnlineOfflineComparisonResult(false, false, NoProjectOpenCode, "No open project available for PLC comparison.");
+        }
+
+        var softwareContainerType = FindType(assembly, SoftwareContainerTypeNames);
+        if (softwareContainerType is null)
+        {
+            return new PlcOnlineOfflineComparisonResult(false, false, PlcCompareUnavailableCode, $"SoftwareContainer type not found for runtime {runtime.Version}.");
+        }
+
+        var devices = ReadDevices(firstProject);
+        if (devices is null || devices.Count == 0)
+        {
+            return new PlcOnlineOfflineComparisonResult(true, true, null, "No devices in project; nothing to compare.");
+        }
+
+        Log.Information("CompareOnlineOffline: Found {DeviceCount} device(s) in project for session {SessionId}", devices.Count, sessionId);
+
+        var comparedAny = false;
+        foreach (var device in devices)
+        {
+            var deviceName = ReadStringProperty(device, "Name") ?? "unknown";
+            var deviceItems = ReadDeviceItems(device);
+            if (deviceItems is null)
+            {
+                Log.Information("CompareOnlineOffline: Device {DeviceName} has no DeviceItems", deviceName);
+                continue;
+            }
+
+            foreach (var deviceItem in deviceItems)
+            {
+                var result = CompareOnlineRecursive(deviceItem, softwareContainerType, runtime, sessionId, deviceName);
+                if (result is not null)
+                {
+                    if (!result.IsEqual)
+                    {
+                        return result;
+                    }
+
+                    comparedAny = true;
+                }
+            }
+        }
+
+        if (comparedAny)
+        {
+            return new PlcOnlineOfflineComparisonResult(true, true);
+        }
+
+        return new PlcOnlineOfflineComparisonResult(false, false, PlcCompareUnavailableCode, "No PLC software with CompareToOnline found in project.");
+    }
+
+    private PlcOnlineOfflineComparisonResult? CompareOnlineRecursive(object deviceItem, Type softwareContainerType, TiaPortalRuntimeInfo runtime, string sessionId, string parentPath = "")
+    {
+        var itemName = ReadStringProperty(deviceItem, "Name") ?? "?";
+        var path = string.IsNullOrEmpty(parentPath) ? itemName : $"{parentPath}/{itemName}";
+
+        var container = ResolveServiceByType(deviceItem, softwareContainerType);
+        if (container is not null)
+        {
+            var software = container.GetType().GetProperty("Software")?.GetValue(container);
+            if (software is not null)
+            {
+                var softwareType = software.GetType().Name;
+                Log.Information("CompareOnlineOffline: [{ItemPath}] Found SoftwareContainer → {SoftwareType}", path, softwareType);
+
+                var compareToOnline = software.GetType().GetMethod("CompareToOnline", Type.EmptyTypes);
+                if (compareToOnline is not null)
+                {
+                    try
+                    {
+                        Log.Information("CompareOnlineOffline: [{ItemPath}] Invoking CompareToOnline()...", path);
+                        var compareResult = compareToOnline.Invoke(software, null);
+                        var hasDifferences = CheckCompareResultForDifferences(compareResult);
+                        LogCompareResultTree(compareResult, path);
+
+                        var diagnosticMsg = hasDifferences
+                            ? $"Differences found at [{path}]. See preceding CompareDetail log entries."
+                            : null;
+                        return new PlcOnlineOfflineComparisonResult(true, !hasDifferences, null, diagnosticMsg);
+                    }
+                    catch (Exception ex)
+                    {
+                        var root = Unwrap(ex);
+                        Log.Warning(root, "CompareToOnline failed at [{ItemPath}] for runtime {TiaVersion} and session {SessionId}", path, runtime.Version, sessionId);
+                        return new PlcOnlineOfflineComparisonResult(false, false, PlcCompareInvocationFailedCode, $"[{path}] {root.Message}");
+                    }
+                }
+                else
+                {
+                    Log.Information("CompareOnlineOffline: [{ItemPath}] {SoftwareType} does not expose CompareToOnline()", path, softwareType);
+                }
+            }
+        }
+
+        var childItems = ReadDeviceItems(deviceItem);
+        if (childItems is not null)
+        {
+            foreach (var child in childItems)
+            {
+                var result = CompareOnlineRecursive(child, softwareContainerType, runtime, sessionId, path);
+                if (result is not null)
+                {
+                    return result;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static bool CheckCompareResultForDifferences(object? compareResult)
+    {
+        if (compareResult is null)
+        {
+            return false;
+        }
+
+        var rootElement = compareResult.GetType().GetProperty("RootElement")?.GetValue(compareResult);
+        if (rootElement is null)
+        {
+            return false;
+        }
+
+        var comparisonResult = rootElement.GetType().GetProperty("ComparisonResult")?.GetValue(rootElement);
+        if (comparisonResult is null)
+        {
+            return false;
+        }
+
+        var stateName = comparisonResult.ToString() ?? string.Empty;
+        return IsDifferenceState(stateName);
+    }
+
+    private static bool IsDifferenceState(string stateName)
+    {
+        return stateName.IndexOf("Different", StringComparison.OrdinalIgnoreCase) >= 0
+            || stateName.IndexOf("Missing", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private static void LogCompareResultTree(object? compareResult, string plcPath)
+    {
+        if (compareResult is null)
+        {
+            Log.Information("CompareDetail: [{PlcPath}] CompareResult is null", plcPath);
+            return;
+        }
+
+        var rootElement = compareResult.GetType().GetProperty("RootElement")?.GetValue(compareResult);
+        if (rootElement is null)
+        {
+            Log.Information("CompareDetail: [{PlcPath}] CompareResult.RootElement is null", plcPath);
+            return;
+        }
+
+        LogCompareElement(rootElement, plcPath, depth: 0);
+    }
+
+    private static void LogCompareElement(object element, string plcPath, int depth)
+    {
+        var leftName = ReadStringProperty(element, "LeftName") ?? "";
+        var rightName = ReadStringProperty(element, "RightName") ?? "";
+        var comparisonResult = element.GetType().GetProperty("ComparisonResult")?.GetValue(element);
+        var stateName = comparisonResult?.ToString() ?? "unknown";
+        var detailedInfo = ReadStringProperty(element, "DetailedInformation") ?? "";
+
+        var indent = new string(' ', depth * 2);
+        var displayName = !string.IsNullOrEmpty(leftName) ? leftName : rightName;
+
+        if (IsDifferenceState(stateName))
+        {
+            Log.Warning("CompareDetail: [{PlcPath}] {Indent}{ObjectName} → {CompareState} Left={LeftName} Right={RightName} Detail={DetailedInfo}",
+                plcPath, indent, displayName, stateName, leftName, rightName, detailedInfo);
+        }
+        else if (depth <= 1)
+        {
+            Log.Information("CompareDetail: [{PlcPath}] {Indent}{ObjectName} → {CompareState}",
+                plcPath, indent, displayName, stateName);
+        }
+
+        var elementsProperty = element.GetType().GetProperty("Elements");
+        if (elementsProperty is null)
+        {
+            return;
+        }
+
+        var elements = elementsProperty.GetValue(element) as System.Collections.IEnumerable;
+        if (elements is null)
+        {
+            return;
+        }
+
+        foreach (var child in elements)
+        {
+            if (child is not null)
+            {
+                LogCompareElement(child, plcPath, depth + 1);
+            }
+        }
+    }
+
     public bool TrySaveProject(Assembly assembly, string sessionId, TiaPortalRuntimeInfo runtime)
     {
         var firstProject = TryGetProject(assembly, sessionId);
@@ -112,6 +403,172 @@ internal abstract class OpennessVersionProviderBase : IOpennessVersionProvider
 
         saveMethod.Invoke(firstProject, null);
         return true;
+    }
+
+    public GoOfflineResult TryGoOffline(Assembly assembly, string sessionId, TiaPortalRuntimeInfo runtime)
+    {
+        var firstProject = TryGetProject(assembly, sessionId);
+        if (firstProject is null)
+        {
+            return new GoOfflineResult(false, 0, 0, GoOfflineNoDevicesCode, "No open project available for GoOffline.");
+        }
+
+        var onlineProviderType = FindType(assembly, OnlineProviderTypeNames);
+        if (onlineProviderType is null)
+        {
+            return new GoOfflineResult(false, 0, 0, GoOfflineOnlineProviderMissingCode, $"OnlineProvider type not found for runtime {runtime.Version}.");
+        }
+
+        var devices = ReadDevices(firstProject);
+        if (devices is null || devices.Count == 0)
+        {
+            return new GoOfflineResult(true, 0, 0, null, "No devices found in project.");
+        }
+
+        var devicesProcessed = 0;
+        var devicesSetOffline = 0;
+        var errors = new List<string>();
+
+        foreach (var device in devices)
+        {
+            var deviceName = ReadStringProperty(device, "Name") ?? "unknown";
+            var deviceItems = ReadDeviceItems(device);
+            if (deviceItems is null)
+            {
+                Log.Information("GoOffline: Device {DeviceName} has no DeviceItems", deviceName);
+                continue;
+            }
+
+            foreach (var deviceItem in deviceItems)
+            {
+                devicesProcessed++;
+                try
+                {
+                    var count = GoOfflineRecursive(deviceItem, onlineProviderType, deviceName);
+                    devicesSetOffline += count;
+                }
+                catch (Exception ex)
+                {
+                    var root = Unwrap(ex);
+                    Log.Warning(root, "GoOffline failed for device {DeviceName} in session {SessionId}", deviceName, sessionId);
+                    errors.Add($"{deviceName}: {root.Message}");
+                }
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return new GoOfflineResult(false, devicesProcessed, devicesSetOffline, GoOfflineFailedCode, $"GoOffline partially failed. {string.Join("; ", errors)}");
+        }
+
+        return new GoOfflineResult(true, devicesProcessed, devicesSetOffline);
+    }
+
+    private int GoOfflineRecursive(object deviceItem, Type onlineProviderType, string deviceName, string parentPath = "")
+    {
+        var count = 0;
+        var itemName = ReadStringProperty(deviceItem, "Name") ?? "?";
+        var path = string.IsNullOrEmpty(parentPath) ? itemName : $"{parentPath}/{itemName}";
+
+        var onlineProvider = ResolveServiceByType(deviceItem, onlineProviderType);
+        if (onlineProvider is not null)
+        {
+            var stateName = ReadOnlineState(onlineProvider);
+            if (string.Equals(stateName, "Online", StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Information("GoOffline: [{DeviceName}] {ItemPath} State={State} → invoking GoOffline()", deviceName, path, stateName);
+                InvokeGoOffline(onlineProvider);
+                count++;
+            }
+            else
+            {
+                Log.Information("GoOffline: [{DeviceName}] {ItemPath} State={State} → already offline, skipping", deviceName, path, stateName);
+            }
+        }
+
+        var childItems = ReadDeviceItems(deviceItem);
+        if (childItems is not null)
+        {
+            foreach (var child in childItems)
+            {
+                count += GoOfflineRecursive(child, onlineProviderType, deviceName, path);
+            }
+        }
+
+        return count;
+    }
+
+    private static bool IsOnline(object onlineProvider)
+    {
+        var stateName = ReadOnlineState(onlineProvider);
+        return string.Equals(stateName, "Online", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ReadOnlineState(object onlineProvider)
+    {
+        var stateProperty = onlineProvider.GetType().GetProperty("State");
+        if (stateProperty is null)
+        {
+            return "NoStateProperty";
+        }
+
+        var stateValue = stateProperty.GetValue(onlineProvider);
+        return stateValue?.ToString() ?? "null";
+    }
+
+    private static void InvokeGoOffline(object onlineProvider)
+    {
+        var method = onlineProvider.GetType().GetMethod("GoOffline", Type.EmptyTypes);
+        if (method is null)
+        {
+            throw new InvalidOperationException($"GoOffline method not found on {onlineProvider.GetType().FullName}.");
+        }
+
+        method.Invoke(onlineProvider, null);
+    }
+
+    private static object? ResolveServiceByType(object target, Type serviceType)
+    {
+        var genericGetService = FindGenericGetService(target.GetType());
+
+        if (genericGetService is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var typedMethod = genericGetService.MakeGenericMethod(serviceType);
+            return typedMethod.Invoke(target, null);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static List<object>? ReadDevices(object project)
+    {
+        var devicesProperty = project.GetType().GetProperty("Devices");
+        if (devicesProperty is null)
+        {
+            return null;
+        }
+
+        var devices = devicesProperty.GetValue(project) as System.Collections.IEnumerable;
+        return devices?.Cast<object>().ToList();
+    }
+
+    private static List<object>? ReadDeviceItems(object deviceOrItem)
+    {
+        var property = deviceOrItem.GetType().GetProperty("DeviceItems");
+        if (property is null)
+        {
+            return null;
+        }
+
+        var items = property.GetValue(deviceOrItem) as System.Collections.IEnumerable;
+        return items?.Cast<object>().ToList();
     }
 
     public bool TryArchiveProject(Assembly assembly, string sessionId, string destinationArchivePath, TiaPortalRuntimeInfo runtime)
@@ -315,6 +772,51 @@ internal abstract class OpennessVersionProviderBase : IOpennessVersionProvider
 
         var attachedPortal = processType.GetMethod("Attach")?.Invoke(selectedProcess, null);
         return attachedPortal is null ? null : ReadFirstProject(attachedPortal);
+    }
+
+    /// <summary>
+    /// Finds a generic GetService&lt;T&gt;() method on the target type.
+    /// Checks public instance methods first, then falls back to interface methods
+    /// (explicit IEngineeringServiceProvider implementations in TIA V19+).
+    /// </summary>
+    private static MethodInfo? FindGenericGetService(Type targetType)
+    {
+        var method = targetType
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(m =>
+                m.Name == "GetService"
+                && m.IsGenericMethodDefinition
+                && m.GetParameters().Length == 0);
+
+        if (method is not null)
+        {
+            return method;
+        }
+
+        foreach (var iface in targetType.GetInterfaces())
+        {
+            method = iface.GetMethods()
+                .FirstOrDefault(m =>
+                    m.Name == "GetService"
+                    && m.IsGenericMethodDefinition
+                    && m.GetParameters().Length == 0);
+
+            if (method is not null)
+            {
+                var map = targetType.GetInterfaceMap(iface);
+                for (var i = 0; i < map.InterfaceMethods.Length; i++)
+                {
+                    if (map.InterfaceMethods[i] == method)
+                    {
+                        return map.TargetMethods[i];
+                    }
+                }
+
+                return method;
+            }
+        }
+
+        return null;
     }
 
     private object? TryResolveArchiveMode(Type archivationModeType)

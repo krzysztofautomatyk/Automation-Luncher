@@ -12,12 +12,18 @@ public partial class MainWindowViewModel : ObservableObject
         await RunArchiveWorkflowAsync();
     }
 
+    /// <summary>Set by App.Archive.cs before calling RunArchiveWorkflowAsync so pre-save info lands in the metrics log.</summary>
+    internal (bool Attempted, bool? Succeeded, string? TriggerSource) PendingPreSave { get; set; }
+
     internal async Task<bool> RunArchiveWorkflowAsync()
     {
         ArchiveWorkflowStateChanged?.Invoke(this, new ArchiveWorkflowStateChangedEventArgs(true));
         IsBusy = true;
         StatusMessage = "Running archive workflow...";
         ArchiveCommand.NotifyCanExecuteChanged();
+
+        var pendingPreSave = PendingPreSave;
+        PendingPreSave = default;
 
         try
         {
@@ -36,7 +42,10 @@ public partial class MainWindowViewModel : ObservableObject
                 TiaVersionSelectionMode = _settings.Archive.TiaVersionSelectionMode,
                 PreferredTiaVersion = _settings.Archive.PreferredTiaVersion,
                 OpennessAssemblyPath = _settings.Archive.OpennessAssemblyPath,
-                KnownVersions = _settings.Archive.KnownVersions
+                KnownVersions = _settings.Archive.KnownVersions,
+                PreSaveAttempted = pendingPreSave.Attempted,
+                PreSaveSucceeded = pendingPreSave.Succeeded,
+                PreSaveTriggerSource = pendingPreSave.TriggerSource
             };
 
             var result = await _archiveProjectUseCase.ExecuteAsync(options, System.Threading.CancellationToken.None);
