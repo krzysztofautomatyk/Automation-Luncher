@@ -35,6 +35,8 @@ public partial class MainWindowViewModel : ObservableObject
     private void HandleFileLogsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         OnPropertyChanged(nameof(VisibleLogCount));
+        OnPropertyChanged(nameof(ErrorLogCount));
+        OnPropertyChanged(nameof(WarnLogCount));
     }
 
     private void UpdateSessionCountdown()

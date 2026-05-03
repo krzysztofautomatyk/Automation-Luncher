@@ -70,10 +70,18 @@
             <Setter Property="BorderBrush" Value="#B23B3B" />
             <Setter Property="Foreground" Value="White" />
         </Style>
+
+        <Style x:Key="SectionLabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="#90A4B0" />
+            <Setter Property="Margin" Value="0,0,0,7" />
+        </Style>
     </Window.Resources>
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -85,6 +93,7 @@
             <ColumnDefinition Width="460" MinWidth="320" />
         </Grid.ColumnDefinitions>
 
+        <!-- Row 0: Header -->
         <Border Grid.ColumnSpan="3" Padding="18" Background="#0D1B2A" CornerRadius="12">
             <StackPanel>
                 <TextBlock Text="Automation Launcher" Foreground="White" FontSize="26" FontWeight="SemiBold" />
@@ -98,108 +107,140 @@
             </StackPanel>
         </Border>
 
-        <Border Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" Padding="16" Background="White" CornerRadius="12">
+        <!-- Row 1: Status Banner -->
+        <Border Grid.Row="1" Grid.ColumnSpan="3" Margin="0,12,0,0" CornerRadius="10" Height="52">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Background" Value="#1B5E20" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HostControlStateDisplay, Mode=OneWay}" Value="Running">
+                            <Setter Property="Background" Value="#0D47A1" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding HostControlStateDisplay, Mode=OneWay}" Value="Error">
+                            <Setter Property="Background" Value="#B71C1C" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding HostControlStateDisplay, Mode=OneWay}" Value="Stopping">
+                            <Setter Property="Background" Value="#E65100" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <Grid Margin="18,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock FontSize="15" FontWeight="Bold" Foreground="White">
+                        <Run Text="● " />
+                        <Run Text="{Binding HostControlStateDisplay, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" FontSize="13" Foreground="#FFFFFFCC">
+                        <Run Text="— " />
+                        <Run Text="{Binding HostName}" />
+                    </TextBlock>
+                </StackPanel>
+                <TextBlock Grid.Column="1"
+                           Margin="20,0,0,0"
+                           VerticalAlignment="Center"
+                           Foreground="#FFFFFFB0"
+                           FontSize="13"
+                           TextWrapping="NoWrap"
+                           TextTrimming="CharacterEllipsis"
+                           Text="{Binding StatusMessage}" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Foreground="#FFFFFFCC" FontSize="12">
+                        <Run Text="Session: " />
+                        <Run Text="{Binding SessionTimeRemaining}" />
+                    </TextBlock>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Row 2: Action Buttons -->
+        <Border Grid.Row="2" Grid.Column="0" Margin="0,12,0,0" Padding="16" Background="White" CornerRadius="12">
             <StackPanel>
-                <UniformGrid Columns="5">
-                    <Button Margin="0,0,12,0"
-                            Height="38"
-                            Content="Settings"
-                            Click="Settings_Click" />
-
-                    <Button Margin="0,0,12,0"
-                            Height="38"
-                            Content="About"
-                            Click="About_Click" />
-
-                        <Button Margin="0,0,12,0"
-                            Height="38"
-                            Content="Show full flow"
-                            Click="ShowFlow_Click" />
-
-                    <Button Height="38"
-                            Margin="0,0,12,0"
-                            Content="Check TIA connection"
+                <!-- Archive -->
+                <TextBlock Text="ARCHIVE" Style="{StaticResource SectionLabelStyle}" />
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <Button Content="Check TIA connection"
                             Style="{StaticResource PositiveActionButtonStyle}"
                             IsEnabled="{Binding CanUseProtectedActions}"
                             Command="{Binding CheckTiaConnectionCommand}" />
-
-                    <Button Height="38"
+                    <Button Content="Create archive now"
                             Margin="0"
-                            Content="Create archive now"
                             Style="{StaticResource PrimaryActionButtonStyle}"
                             IsEnabled="{Binding CanUseProtectedActions}"
                             Click="ArchiveNow_Click" />
-                </UniformGrid>
+                </StackPanel>
 
-                <TextBlock Margin="0,12,0,0"
-                           Foreground="#5B6A72"
-                           Text="Protected functions are enabled only after unlocking the session in Settings. Dashboard and tray actions stay in sync." />
+                <Border Height="1" Background="#E8EDF0" Margin="0,0,0,12" />
 
-                <UniformGrid Columns="4" Margin="0,12,0,0">
-                    <Button Margin="0,0,12,0"
-                            Height="34"
-                            Content="Run startup automation now"
+                <!-- Process control -->
+                <TextBlock Text="PROCESS CONTROL" Style="{StaticResource SectionLabelStyle}" />
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <Button Content="Run startup automation"
                             IsEnabled="{Binding CanRunStartupAutomationManually}"
                             Click="RunStartupAutomation_Click" />
-
-                    <Button Margin="0,0,12,0"
-                            Height="34"
-                            Content="Run managed applications"
+                    <Button Content="Run managed apps"
                             IsEnabled="{Binding CanRunStartupAutomationManually}"
                             Click="RunManagedApplications_Click" />
-
-                    <Button Margin="0,0,12,0"
-                            Height="34"
-                            Content="Stop managed applications"
+                    <Button Content="Stop managed apps"
+                            Margin="0"
                             Style="{StaticResource DangerActionButtonStyle}"
                             IsEnabled="{Binding CanStopManagedApplications}"
                             Click="StopManagedApplications_Click" />
+                </StackPanel>
 
-                    <Button Height="34"
-                            Margin="0"
-                            Content="Open autostart folder"
-                            IsEnabled="{Binding CanUseProtectedUtilities}"
-                            Command="{Binding OpenStartupFolderCommand}" />
-                </UniformGrid>
+                <Border Height="1" Background="#E8EDF0" Margin="0,0,0,12" />
 
-                <UniformGrid Columns="5" Margin="0,10,0,0">
-                    <Button Margin="0,0,12,0"
-                            Height="34"
-                            Content="Open control files folder"
-                            IsEnabled="{Binding CanUseProtectedUtilities}"
-                            Command="{Binding OpenControlFilesFolderCommand}" />
-
-                    <Button Margin="0,0,12,0"
-                            Height="34"
-                            Content="Open log folder"
-                            IsEnabled="{Binding CanUseProtectedUtilities}"
-                            Command="{Binding OpenLogDirectoryCommand}" />
-
-                    <Button Margin="0,0,12,0"
-                            Height="34"
-                            Content="Delete error"
-                            Style="{StaticResource DangerActionButtonStyle}"
-                            IsEnabled="{Binding HasErrorControlFile}"
-                            Click="DeleteError_Click" />
-
-                        <Button Margin="0,0,12,0"
-                            Height="34"
-                            Content="Log in"
+                <!-- Session -->
+                <TextBlock Text="SESSION" Style="{StaticResource SectionLabelStyle}" />
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <Button Content="Log in"
                             Style="{StaticResource PositiveActionButtonStyle}"
                             IsEnabled="{Binding CanLoginSession}"
                             Click="Login_Click" />
-
-                    <Button Height="34"
+                    <Button Content="Log out"
                             Margin="0"
-                            Content="Log out"
                             Style="{StaticResource DangerActionButtonStyle}"
                             IsEnabled="{Binding IsSessionAuthenticated}"
                             Command="{Binding LogoutSessionCommand}" />
-                </UniformGrid>
+                </StackPanel>
 
-                <Grid Margin="0,10,0,0">
-                    <Button Width="120"
-                            HorizontalAlignment="Right"
+                <Border Height="1" Background="#E8EDF0" Margin="0,0,0,12" />
+
+                <!-- Tools -->
+                <TextBlock Text="TOOLS &amp; NAVIGATION" Style="{StaticResource SectionLabelStyle}" />
+                <WrapPanel Margin="0,0,0,12">
+                    <Button Content="Settings" Click="Settings_Click" />
+                    <Button Content="About" Click="About_Click" />
+                    <Button Content="Show full flow" Click="ShowFlow_Click" />
+                    <Button Content="Control files folder"
+                            IsEnabled="{Binding CanUseProtectedUtilities}"
+                            Command="{Binding OpenControlFilesFolderCommand}" />
+                    <Button Content="Log folder"
+                            IsEnabled="{Binding CanUseProtectedUtilities}"
+                            Command="{Binding OpenLogDirectoryCommand}" />
+                    <Button Content="Autostart folder"
+                            Margin="0"
+                            IsEnabled="{Binding CanUseProtectedUtilities}"
+                            Command="{Binding OpenStartupFolderCommand}" />
+                </WrapPanel>
+
+                <Border Height="1" Background="#E8EDF0" Margin="0,0,0,12" />
+
+                <!-- Danger / Exit -->
+                <Grid>
+                    <Button HorizontalAlignment="Left"
+                            Margin="0"
+                            Content="Delete error marker"
+                            Style="{StaticResource DangerActionButtonStyle}"
+                            IsEnabled="{Binding HasErrorControlFile}"
+                            Click="DeleteError_Click" />
+                    <Button HorizontalAlignment="Right"
+                            Width="80"
                             Margin="0"
                             Content="Exit"
                             Click="Exit_Click" />
@@ -207,16 +248,46 @@
             </StackPanel>
         </Border>
 
-        <Border Grid.Row="2" Grid.Column="0" Margin="0,16,0,0" Padding="16" Background="White" CornerRadius="12">
+        <!-- Row 3: Runtime Status -->
+        <Border Grid.Row="3" Grid.Column="0" Margin="0,12,0,0" Padding="16" Background="White" CornerRadius="12">
             <ScrollViewer VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Auto">
                 <StackPanel>
-                    <TextBlock Text="Runtime status" FontSize="18" FontWeight="SemiBold" />
-                    <TextBlock Margin="0,10,0,0" Text="{Binding StatusMessage}" TextWrapping="Wrap" />
-                    <TextBlock Margin="0,10,0,0" Foreground="#5B6A72" Text="{Binding RuntimeDecisionMessage}" TextWrapping="Wrap" />
-                    <TextBlock Margin="0,10,0,0" Foreground="#5B6A72" Text="{Binding SettingsStatusMessage}" TextWrapping="Wrap" />
+                    <TextBlock Text="Runtime status" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
 
-                    <Grid Margin="0,12,0,0">
+                    <!-- Key status card (highlighted) -->
+                    <Border Padding="12" Background="#EEF6FF" CornerRadius="8" BorderBrush="#B8D4F0" BorderThickness="1" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Text="Host control state" FontWeight="Bold" />
+                            <TextBlock Grid.Column="1" FontWeight="Bold" Text="{Binding HostControlStateDisplay, Mode=OneWay}" />
+
+                            <TextBlock Grid.Row="1" Text="Host name" FontWeight="SemiBold" Margin="0,8,0,0" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostName}" />
+
+                            <TextBlock Grid.Row="2" Text="Selected runtime" FontWeight="SemiBold" Margin="0,8,0,0" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Text="{Binding SelectedRuntimeVersion}" TextWrapping="Wrap" />
+
+                            <TextBlock Grid.Row="3" Text="TIA provider" FontWeight="SemiBold" Margin="0,8,0,0" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" Text="{Binding SelectedProviderName}" TextWrapping="Wrap" />
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Margin="0,0,0,4" Text="{Binding RuntimeDecisionMessage}" TextWrapping="Wrap" Foreground="#5B6A72" />
+                    <TextBlock Margin="0,0,0,12" Text="{Binding SettingsStatusMessage}" TextWrapping="Wrap" Foreground="#5B6A72" />
+
+                    <!-- Detail fields -->
+                    <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="220" />
                             <ColumnDefinition Width="*" MinWidth="360" />
@@ -232,72 +303,48 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <TextBlock Text="Host name" FontWeight="SemiBold" />
-                        <TextBlock Grid.Column="1" Text="{Binding HostName}" TextWrapping="Wrap" />
+                        <TextBlock Text="Application version" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="1" Text="{Binding AppVersion}" TextWrapping="Wrap" />
 
-                        <TextBlock Grid.Row="1" Text="Application version" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" Text="{Binding AppVersion}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="1" Text="Configured project path" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" Text="{Binding ExpectedProjectPath}" TextWrapping="Wrap" />
 
-                        <TextBlock Grid.Row="2" Text="Configured project path" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Text="{Binding ExpectedProjectPath}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="2" Text="Archive directory" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Text="{Binding ArchiveOutputDirectory}" TextWrapping="Wrap" />
 
-                        <TextBlock Grid.Row="3" Text="Archive directory" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" Text="{Binding ArchiveOutputDirectory}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="3" Text="Detected process version" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" Text="{Binding DetectedProcessVersion}" TextWrapping="Wrap" />
 
-                        <TextBlock Grid.Row="4" Text="Detected process version" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,8,0,0" Text="{Binding DetectedProcessVersion}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="4" Text="Assembly path" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,8,0,0" Text="{Binding SelectedAssemblyPath}" TextWrapping="Wrap" />
 
-                        <TextBlock Grid.Row="5" Text="Selected runtime" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="5" Grid.Column="1" Margin="0,8,0,0" Text="{Binding SelectedRuntimeVersion}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="5" Text="Control files folder" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="5" Grid.Column="1" Margin="0,8,0,0" Text="{Binding ControlFilesFolderPath}" TextWrapping="Wrap" />
 
-                        <TextBlock Grid.Row="6" Text="Selected provider" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="6" Grid.Column="1" Margin="0,8,0,0" Text="{Binding SelectedProviderName}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="6" Margin="0,10,0,0" Text="Control file paths" FontWeight="SemiBold" Foreground="#90A4B0" />
 
-                        <TextBlock Grid.Row="7" Text="Assembly path" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="7" Grid.Column="1" Margin="0,8,0,0" Text="{Binding SelectedAssemblyPath}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="7" Text="Run / Ready / Error" FontSize="11" Foreground="#90A4B0" Margin="0,6,0,0" />
+                        <StackPanel Grid.Row="7" Grid.Column="1" Margin="0,6,0,0">
+                            <TextBlock Text="{Binding HostRunFilePath}" Foreground="#90A4B0" FontSize="11" FontFamily="Consolas" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding HostReadyFilePath}" Foreground="#90A4B0" FontSize="11" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,2,0,0" />
+                            <TextBlock Text="{Binding HostErrorFilePath}" Foreground="#90A4B0" FontSize="11" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,2,0,0" />
+                        </StackPanel>
 
-                        <TextBlock Grid.Row="8" Text="Host control state" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="8" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostControlStateDisplay}" TextWrapping="Wrap" />
-
-                        <TextBlock Grid.Row="9" Text="Control files folder" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="9" Grid.Column="1" Margin="0,8,0,0" Text="{Binding ControlFilesFolderPath}" TextWrapping="Wrap" />
-
-                        <TextBlock Grid.Row="10" Text="Run file" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="10" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostRunFilePath}" TextWrapping="Wrap" />
-
-                        <TextBlock Grid.Row="11" Text="Ready file" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="11" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostReadyFilePath}" TextWrapping="Wrap" />
-
-                        <TextBlock Grid.Row="12" Text="Error file" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="12" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostErrorFilePath}" TextWrapping="Wrap" />
-
-                        <TextBlock Grid.Row="13" Text="Start file" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="13" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostStartFilePath}" TextWrapping="Wrap" />
-
-                        <TextBlock Grid.Row="14" Text="Stop file" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="14" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostStopFilePath}" TextWrapping="Wrap" />
-
-                        <TextBlock Grid.Row="15" Text="March file" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="15" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostMarchFilePath}" TextWrapping="Wrap" />
-
-                        <TextBlock Grid.Row="16" Text="Archok file" FontWeight="SemiBold" Margin="0,8,0,0" />
-                        <TextBlock Grid.Row="16" Grid.Column="1" Margin="0,8,0,0" Text="{Binding HostArchOkFilePath}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="8" Text="Start / Stop / March / Archok" FontSize="11" Foreground="#90A4B0" Margin="0,6,0,0" />
+                        <StackPanel Grid.Row="8" Grid.Column="1" Margin="0,6,0,0">
+                            <TextBlock Text="{Binding HostStartFilePath}" Foreground="#90A4B0" FontSize="11" FontFamily="Consolas" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding HostStopFilePath}" Foreground="#90A4B0" FontSize="11" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,2,0,0" />
+                            <TextBlock Text="{Binding HostMarchFilePath}" Foreground="#90A4B0" FontSize="11" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,2,0,0" />
+                            <TextBlock Text="{Binding HostArchOkFilePath}" Foreground="#90A4B0" FontSize="11" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,2,0,0" />
+                        </StackPanel>
                     </Grid>
                 </StackPanel>
             </ScrollViewer>
         </Border>
 
-        <GridSplitter Grid.Row="1"
+        <GridSplitter Grid.Row="2"
                       Grid.Column="1"
                       Grid.RowSpan="3"
                       Width="8"
@@ -308,7 +355,8 @@
                       ShowsPreview="True"
                       Background="#D0D7DE" />
 
-        <Border Grid.Row="1" Grid.Column="2" Grid.RowSpan="3" Margin="0,16,0,0" Padding="16" Background="White" CornerRadius="12">
+        <!-- Right: Logs Panel (Row 2–4) -->
+        <Border Grid.Row="2" Grid.Column="2" Grid.RowSpan="3" Margin="0,12,0,0" Padding="16" Background="White" CornerRadius="12">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -318,21 +366,32 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
+                <!-- Logs header with ERR/WRN badges -->
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <TextBlock Text="Logs"
-                               FontSize="18"
-                               FontWeight="SemiBold" />
+                    <TextBlock Text="Logs" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
 
-                    <TextBlock Grid.Column="1"
+                    <Border Grid.Column="1" Margin="0,0,6,0" Padding="7,2" CornerRadius="10" VerticalAlignment="Center" Background="#FDECEA">
+                        <TextBlock FontSize="11" FontWeight="Bold" Foreground="#B71C1C"
+                                   Text="{Binding ErrorLogCount, StringFormat=ERR {0}}" />
+                    </Border>
+
+                    <Border Grid.Column="2" Margin="0,0,10,0" Padding="7,2" CornerRadius="10" VerticalAlignment="Center" Background="#FFF3E0">
+                        <TextBlock FontSize="11" FontWeight="Bold" Foreground="#E65100"
+                                   Text="{Binding WarnLogCount, StringFormat=WRN {0}}" />
+                    </Border>
+
+                    <TextBlock Grid.Column="3"
                                VerticalAlignment="Center"
                                Foreground="#5B6A72"
                                FontWeight="SemiBold"
-                               Text="{Binding VisibleLogCount, StringFormat=Visible: {0}}" />
+                               Text="{Binding VisibleLogCount, StringFormat=Total: {0}}" />
                 </Grid>
 
                 <Grid Grid.Row="1" Margin="0,12,0,0">
@@ -425,7 +484,8 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="3" Grid.Column="0" Margin="0,14,0,0">
+        <!-- Row 4: Footer -->
+        <Grid Grid.Row="4" Grid.Column="0" Margin="0,14,0,0">
             <TextBlock Text="The main window stays outside the taskbar. Use the tray icon next to the clock for quick actions and settings."
                        Foreground="#5B6A72"
                        TextWrapping="Wrap" />

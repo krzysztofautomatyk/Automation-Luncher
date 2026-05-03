@@ -249,6 +249,10 @@ public partial class MainWindowViewModel : ObservableObject
 
     public int VisibleLogCount => FileLogs.Count;
 
+    public int ErrorLogCount => FileLogs.Count(e => e.Level == "ERR" || e.Level == "FTL");
+
+    public int WarnLogCount => FileLogs.Count(e => e.Level == "WRN");
+
     public bool HasLogSearchText => !string.IsNullOrWhiteSpace(LogSearchText);
 
     public bool IsTimestampedBackupFlowSelected => string.Equals(SelectedArchiveBackupFlow, ArchiveBackupFlow.TimestampedRetention.ToString(), StringComparison.OrdinalIgnoreCase);
