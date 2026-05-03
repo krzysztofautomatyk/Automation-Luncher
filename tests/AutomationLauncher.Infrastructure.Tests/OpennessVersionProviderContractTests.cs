@@ -121,7 +121,7 @@ public sealed class OpennessVersionProviderContractTests : IDisposable
             AttachedPortal = new AttachedPortalProjects { Projects = new object[] { project } }
         });
 
-        var provider = new LatestOpennessVersionProvider();
+        var provider = new V20OpennessVersionProvider();
         var runtime = new TiaPortalRuntimeInfo("V20", "TIA Portal V20", @"C:\Portal V20\Siemens.Engineering.dll", "Test");
         var archivePath = Path.Combine(_tempRoot, "latest.zap20");
 
@@ -134,23 +134,57 @@ public sealed class OpennessVersionProviderContractTests : IDisposable
         Assert.True(archiveResult);
     }
 
+    [Fact]
+    public void V21Provider_ReadsLocationAndArchives()
+    {
+        var project = new LatestProject
+        {
+            Name = "V21Project",
+            IsModified = true,
+            Location = @"C:\Projects\V21.apx"
+        };
+
+        FakeOpennessRuntimeState.Reset(new TiaPortalProcess
+        {
+            Id = 310,
+            AttachedPortal = new AttachedPortalProjects { Projects = new object[] { project } }
+        });
+
+        var provider = new V21OpennessVersionProvider();
+        var runtime = new TiaPortalRuntimeInfo("V21", "TIA Portal V21", @"C:\Portal V21\PublicAPI\V21\net48\Siemens.Engineering.Base.dll", "Test");
+        var archivePath = Path.Combine(_tempRoot, "v21.zap21");
+
+        var context = provider.TryReadOpenProject(typeof(TiaPortal).Assembly, 310, runtime);
+        var archiveResult = provider.TryArchiveProject(typeof(TiaPortal).Assembly, "310", archivePath, runtime);
+
+        Assert.True(context.UnsavedStateDetectedReliably);
+        Assert.True(context.HasUnsavedChanges);
+        Assert.Equal(@"C:\Projects\V21.apx", context.OpenProjectPath);
+        Assert.Equal("V21Project", context.ProjectName);
+        Assert.True(archiveResult);
+    }
+
     [Theory]
-    [InlineData("V15", true, false, false, false, false, false)]
-    [InlineData("V16", false, true, false, false, false, false)]
-    [InlineData("V17", false, false, true, false, false, false)]
-    [InlineData("V18", false, false, false, true, false, false)]
-    [InlineData("V19", false, false, false, false, true, false)]
-    [InlineData("V20", false, false, false, false, false, true)]
-    public void Providers_HandleExpectedVersionBands(string version, bool v15, bool v16, bool v17, bool v18, bool v19, bool latest)
+    [InlineData("V15", true,  false, false, false, false, false, false, false)]
+    [InlineData("V16", false, true,  false, false, false, false, false, false)]
+    [InlineData("V17", false, false, true,  false, false, false, false, false)]
+    [InlineData("V18", false, false, false, true,  false, false, false, false)]
+    [InlineData("V19", false, false, false, false, true,  false, false, false)]
+    [InlineData("V20", false, false, false, false, false, true,  false, false)]
+    [InlineData("V21", false, false, false, false, false, false, true,  false)]
+    [InlineData("V22", false, false, false, false, false, false, false, true)]
+    public void Providers_HandleExpectedVersionBands(string version, bool v15, bool v16, bool v17, bool v18, bool v19, bool v20, bool v21, bool latest)
     {
         var runtime = new TiaPortalRuntimeInfo(version, $"TIA Portal {version}", $@"C:\Portal {version}\Siemens.Engineering.dll", "Test");
 
-        Assert.Equal(v15, new V15OpennessVersionProvider().CanHandle(runtime));
-        Assert.Equal(v16, new V16OpennessVersionProvider().CanHandle(runtime));
-        Assert.Equal(v17, new V17OpennessVersionProvider().CanHandle(runtime));
-        Assert.Equal(v18, new V18OpennessVersionProvider().CanHandle(runtime));
-        Assert.Equal(v19, new V19OpennessVersionProvider().CanHandle(runtime));
-        Assert.Equal(latest, new LatestOpennessVersionProvider().CanHandle(runtime));
+        Assert.Equal(v15,     new V15OpennessVersionProvider().CanHandle(runtime));
+        Assert.Equal(v16,     new V16OpennessVersionProvider().CanHandle(runtime));
+        Assert.Equal(v17,     new V17OpennessVersionProvider().CanHandle(runtime));
+        Assert.Equal(v18,     new V18OpennessVersionProvider().CanHandle(runtime));
+        Assert.Equal(v19,     new V19OpennessVersionProvider().CanHandle(runtime));
+        Assert.Equal(v20,     new V20OpennessVersionProvider().CanHandle(runtime));
+        Assert.Equal(v21,     new V21OpennessVersionProvider().CanHandle(runtime));
+        Assert.Equal(latest,  new LatestOpennessVersionProvider().CanHandle(runtime));
     }
 
     public void Dispose()

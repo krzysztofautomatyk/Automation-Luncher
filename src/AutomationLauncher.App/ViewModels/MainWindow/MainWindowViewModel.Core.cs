@@ -32,6 +32,7 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly ISessionCoordinator _sessionCoordinator;
     private readonly IAutostartService _autostartService;
     private readonly AutomationLauncherSettings _settings;
+    private readonly PowerShellScriptRunner _powerShellScriptRunner = new();
     private readonly DispatcherTimer _sessionCountdownTimer;
     private readonly DispatcherTimer _fileLogRefreshTimer;
     private readonly List<string> _allFileLogLines = new();
@@ -200,6 +201,48 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private StartupSequenceEntry? selectedStartupSequenceEntry;
 
+    [ObservableProperty]
+    private ProjectScriptEntry? selectedProjectScriptEntry;
+
+    [ObservableProperty]
+    private ProjectScriptParameterEntry? selectedProjectScriptParameter;
+
+    [ObservableProperty]
+    private ControlFileScriptBinding? selectedControlFileScriptBinding;
+
+    [ObservableProperty]
+    private ControlFileScriptSequenceStep? selectedPreControlFileScriptStep;
+
+    [ObservableProperty]
+    private ControlFileScriptSequenceStep? selectedPostControlFileScriptStep;
+
+    [ObservableProperty]
+    private ControlFileScriptSequenceStep? activeControlFileScriptStep;
+
+    [ObservableProperty]
+    private string activeControlFileScriptPhase = "pre";
+
+    [ObservableProperty]
+    private ControlFileScriptParameterOverrideEntry? selectedActiveControlFileParameterOverride;
+
+    [ObservableProperty]
+    private bool isRunningProjectScript;
+
+    [ObservableProperty]
+    private string projectScriptExecutionStatus = "Select a script to edit or run it.";
+
+    [ObservableProperty]
+    private string projectScriptExecutionOutput = string.Empty;
+
+    [ObservableProperty]
+    private string projectScriptPreview = string.Empty;
+
+    [ObservableProperty]
+    private string controlFileStepPreview = string.Empty;
+
+    [ObservableProperty]
+    private string controlFileStepPreviewStatus = "Select a control-file step to edit parameter overrides and preview the final script.";
+
     public ObservableCollection<string> History { get; } = new();
     public RangeObservableCollection<LogLineEntry> FileLogs { get; } = new();
     public RangeObservableCollection<string> OpennessRelatedLocalGroups { get; } = new();
@@ -225,6 +268,17 @@ public partial class MainWindowViewModel : ObservableObject
     };
 
     public ObservableCollection<StartupSequenceEntry> StartupSequenceEntries { get; } = new();
+
+    public ObservableCollection<ProjectScriptEntry> ProjectScriptEntries { get; } = new();
+
+    public ObservableCollection<ControlFileScriptBinding> ControlFileScriptBindings { get; } = new();
+
+    public ObservableCollection<ControlFileScriptOutcomeAction> ControlFileScriptOutcomeActions { get; } = new()
+    {
+        ControlFileScriptOutcomeAction.ContinueControlFlow,
+        ControlFileScriptOutcomeAction.AbortControlFlow,
+        ControlFileScriptOutcomeAction.RunNextScript
+    };
 
     public ObservableCollection<string> LogLevels { get; } = new()
     {
@@ -280,6 +334,8 @@ public partial class MainWindowViewModel : ObservableObject
         IsSessionAuthenticated = _sessionCoordinator.IsAuthenticated;
 
         LoadRuntimeCatalog();
+        LoadProjectScriptEntries();
+        LoadControlFileScriptBindings();
         LoadStartupSequenceEntries();
         EnsureAutostartMatchesSettings();
         _isInitializing = false;
@@ -308,6 +364,13 @@ public partial class MainWindowViewModel : ObservableObject
     public bool CanUseProtectedActions => IsSessionAuthenticated && !IsBusy;
 
     public bool CanUseProtectedUtilities => IsSessionAuthenticated;
+
+    public bool CanRunSelectedProjectScript => IsSessionAuthenticated
+        && !IsRunningProjectScript
+        && SelectedProjectScriptEntry is not null
+        && !string.IsNullOrWhiteSpace(SelectedProjectScriptEntry.ScriptBody);
+
+    public bool HasSelectedControlFileBinding => SelectedControlFileScriptBinding is not null;
 
     public bool CanLoginSession => !IsSessionAuthenticated;
 

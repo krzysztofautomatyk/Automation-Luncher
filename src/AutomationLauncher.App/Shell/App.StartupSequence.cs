@@ -147,7 +147,7 @@ public partial class App : System.Windows.Application
         {
             await StopTrackedStartupProcessesAsync();
             Log.Logger.Error(ex, "Startup automation failed");
-            MarkErrorControlFile($"Startup automation failed: {ex.Message}");
+            await MarkErrorControlFileAsync($"Startup automation failed: {ex.Message}");
             _notifyIcon?.ShowBalloonTip(3000, "Automation Launcher", $"Startup automation failed: {ex.Message}", ToolTipIcon.Error);
         }
         finally

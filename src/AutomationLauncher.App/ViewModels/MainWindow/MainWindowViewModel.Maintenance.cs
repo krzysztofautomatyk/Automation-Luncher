@@ -164,6 +164,12 @@ public partial class MainWindowViewModel : ObservableObject
             ? TiaPortalVersionSelectionMode.Manual
             : TiaPortalVersionSelectionMode.Auto;
         _settings.Archive.PreferredTiaVersion = SelectedTiaRuntime?.Version;
+        _settings.Project.PowerShellScripts = ProjectScriptEntries
+            .Select(entry => entry.Clone())
+            .ToList();
+        _settings.ControlFiles.Bindings = ControlFileScriptBindings
+            .Select(binding => binding.Clone())
+            .ToList();
         _settings.Startup.RunOnWindowsStartup = LaunchOnWindowsStartup;
         _settings.Startup.RunSequenceOnWindowsStartup = RunStartupSequenceOnWindowsStartup;
         _settings.Startup.SplashBackgroundImagePath = StartupSplashBackgroundImagePath?.Trim() ?? string.Empty;
@@ -292,9 +298,316 @@ public partial class MainWindowViewModel : ObservableObject
         LogMinimumLevel = _settings.Logging.MinimumLevel;
         LogRetentionFileCount = _settings.Logging.RetainedFileCountLimit;
         LoadRuntimeCatalog();
+        LoadProjectScriptEntries();
+        LoadControlFileScriptBindings();
         LoadStartupSequenceEntries();
         _isInitializing = false;
         UpdateSessionCountdown();
+    }
+
+    private void LoadProjectScriptEntries()
+    {
+        ProjectScriptEntries.CollectionChanged -= HandleProjectScriptEntriesChanged;
+
+        foreach (var existingEntry in ProjectScriptEntries)
+        {
+            DetachProjectScriptEntry(existingEntry);
+        }
+
+        ProjectScriptEntries.Clear();
+
+        foreach (var entry in _settings.Project.PowerShellScripts)
+        {
+            var clone = entry.Clone();
+            AttachProjectScriptEntry(clone);
+            ProjectScriptEntries.Add(clone);
+        }
+
+        ProjectScriptEntries.CollectionChanged += HandleProjectScriptEntriesChanged;
+        SelectedProjectScriptEntry = ProjectScriptEntries.FirstOrDefault();
+    }
+
+    private void AttachProjectScriptEntry(ProjectScriptEntry entry)
+    {
+        entry.PropertyChanged += HandleProjectScriptEntryPropertyChanged;
+        entry.Parameters.CollectionChanged += HandleProjectScriptParametersChanged;
+
+        foreach (var parameter in entry.Parameters)
+        {
+            parameter.PropertyChanged += HandleProjectScriptParameterPropertyChanged;
+        }
+    }
+
+    private void DetachProjectScriptEntry(ProjectScriptEntry entry)
+    {
+        entry.PropertyChanged -= HandleProjectScriptEntryPropertyChanged;
+        entry.Parameters.CollectionChanged -= HandleProjectScriptParametersChanged;
+
+        foreach (var parameter in entry.Parameters)
+        {
+            parameter.PropertyChanged -= HandleProjectScriptParameterPropertyChanged;
+        }
+    }
+
+    private void LoadControlFileScriptBindings()
+    {
+        ControlFileScriptBindings.CollectionChanged -= HandleControlFileScriptBindingsChanged;
+
+        foreach (var existingBinding in ControlFileScriptBindings)
+        {
+            DetachControlFileBinding(existingBinding);
+        }
+
+        ControlFileScriptBindings.Clear();
+
+        foreach (var binding in _settings.ControlFiles.Bindings)
+        {
+            var clone = binding.Clone();
+            AttachControlFileBinding(clone);
+            ControlFileScriptBindings.Add(clone);
+        }
+
+        ControlFileScriptBindings.CollectionChanged += HandleControlFileScriptBindingsChanged;
+        SelectedControlFileScriptBinding = ControlFileScriptBindings.FirstOrDefault();
+    }
+
+    private void AttachControlFileBinding(ControlFileScriptBinding binding)
+    {
+        binding.PreExecutionSteps.CollectionChanged += HandleControlFileBindingStepsChanged;
+        binding.PostExecutionSteps.CollectionChanged += HandleControlFileBindingStepsChanged;
+
+        foreach (var step in binding.PreExecutionSteps)
+        {
+            AttachControlFileStep(step);
+        }
+
+        foreach (var step in binding.PostExecutionSteps)
+        {
+            AttachControlFileStep(step);
+        }
+    }
+
+    private void DetachControlFileBinding(ControlFileScriptBinding binding)
+    {
+        binding.PreExecutionSteps.CollectionChanged -= HandleControlFileBindingStepsChanged;
+        binding.PostExecutionSteps.CollectionChanged -= HandleControlFileBindingStepsChanged;
+
+        foreach (var step in binding.PreExecutionSteps)
+        {
+            DetachControlFileStep(step);
+        }
+
+        foreach (var step in binding.PostExecutionSteps)
+        {
+            DetachControlFileStep(step);
+        }
+    }
+
+    private void AttachControlFileStep(ControlFileScriptSequenceStep step)
+    {
+        step.PropertyChanged += HandleControlFileScriptStepPropertyChanged;
+        step.ParameterOverrides.CollectionChanged += HandleControlFileStepParameterOverridesChanged;
+
+        foreach (var overrideEntry in step.ParameterOverrides)
+        {
+            overrideEntry.PropertyChanged += HandleControlFileStepParameterOverridePropertyChanged;
+        }
+    }
+
+    private void DetachControlFileStep(ControlFileScriptSequenceStep step)
+    {
+        step.PropertyChanged -= HandleControlFileScriptStepPropertyChanged;
+        step.ParameterOverrides.CollectionChanged -= HandleControlFileStepParameterOverridesChanged;
+
+        foreach (var overrideEntry in step.ParameterOverrides)
+        {
+            overrideEntry.PropertyChanged -= HandleControlFileStepParameterOverridePropertyChanged;
+        }
+    }
+
+    private void HandleControlFileScriptBindingsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems is not null)
+        {
+            foreach (ControlFileScriptBinding binding in e.OldItems)
+            {
+                DetachControlFileBinding(binding);
+            }
+        }
+
+        if (e.NewItems is not null)
+        {
+            foreach (ControlFileScriptBinding binding in e.NewItems)
+            {
+                AttachControlFileBinding(binding);
+            }
+        }
+
+        if (_isInitializing || !_sessionCoordinator.IsAuthenticated)
+        {
+            return;
+        }
+
+        PersistSettings("Control file script automation updated.");
+    }
+
+    private void HandleControlFileBindingStepsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems is not null)
+        {
+            foreach (ControlFileScriptSequenceStep step in e.OldItems)
+            {
+                DetachControlFileStep(step);
+            }
+        }
+
+        if (e.NewItems is not null)
+        {
+            foreach (ControlFileScriptSequenceStep step in e.NewItems)
+            {
+                AttachControlFileStep(step);
+            }
+        }
+
+        if (_isInitializing || !_sessionCoordinator.IsAuthenticated)
+        {
+            return;
+        }
+
+        PersistSettings("Control file script automation updated.");
+    }
+
+    private void HandleControlFileScriptStepPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_isInitializing || !_sessionCoordinator.IsAuthenticated)
+        {
+            return;
+        }
+
+        PersistSettings("Control file script automation updated.");
+        RefreshControlFileStepPreview();
+    }
+
+    private void HandleControlFileStepParameterOverridesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems is not null)
+        {
+            foreach (ControlFileScriptParameterOverrideEntry overrideEntry in e.OldItems)
+            {
+                overrideEntry.PropertyChanged -= HandleControlFileStepParameterOverridePropertyChanged;
+            }
+        }
+
+        if (e.NewItems is not null)
+        {
+            foreach (ControlFileScriptParameterOverrideEntry overrideEntry in e.NewItems)
+            {
+                overrideEntry.PropertyChanged += HandleControlFileStepParameterOverridePropertyChanged;
+            }
+        }
+
+        if (_isInitializing || !_sessionCoordinator.IsAuthenticated)
+        {
+            return;
+        }
+
+        PersistSettings("Control file script parameter overrides updated.");
+        RefreshControlFileStepPreview();
+    }
+
+    private void HandleControlFileStepParameterOverridePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_isInitializing || !_sessionCoordinator.IsAuthenticated)
+        {
+            return;
+        }
+
+        PersistSettings("Control file script parameter overrides updated.");
+        RefreshControlFileStepPreview();
+    }
+
+    private void HandleProjectScriptEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems is not null)
+        {
+            foreach (ProjectScriptEntry entry in e.OldItems)
+            {
+                DetachProjectScriptEntry(entry);
+            }
+        }
+
+        if (e.NewItems is not null)
+        {
+            foreach (ProjectScriptEntry entry in e.NewItems)
+            {
+                AttachProjectScriptEntry(entry);
+            }
+        }
+
+        if (_isInitializing || !_sessionCoordinator.IsAuthenticated)
+        {
+            return;
+        }
+
+        PersistSettings("Project script library updated.");
+        RefreshProjectScriptPreview();
+    }
+
+    private void HandleProjectScriptParametersChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems is not null)
+        {
+            foreach (ProjectScriptParameterEntry parameter in e.OldItems)
+            {
+                parameter.PropertyChanged -= HandleProjectScriptParameterPropertyChanged;
+            }
+        }
+
+        if (e.NewItems is not null)
+        {
+            foreach (ProjectScriptParameterEntry parameter in e.NewItems)
+            {
+                parameter.PropertyChanged += HandleProjectScriptParameterPropertyChanged;
+            }
+        }
+
+        if (_isInitializing || !_sessionCoordinator.IsAuthenticated)
+        {
+            return;
+        }
+
+        PersistSettings("Script parameters updated.");
+        RefreshProjectScriptPreview();
+    }
+
+    private void HandleProjectScriptParameterPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_isInitializing || !_sessionCoordinator.IsAuthenticated)
+        {
+            return;
+        }
+
+        PersistSettings("Script parameters updated.");
+        RefreshProjectScriptPreview();
+    }
+
+    private void HandleProjectScriptEntryPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ProjectScriptEntry.IsRunning)
+            || e.PropertyName == nameof(ProjectScriptEntry.LastRunStatus)
+            || e.PropertyName == nameof(ProjectScriptEntry.LastRunFinishedAt)
+            || e.PropertyName == nameof(ProjectScriptEntry.LastExitCode)
+            || e.PropertyName == nameof(ProjectScriptEntry.LastOutput))
+        {
+            return;
+        }
+
+        if (_isInitializing || !_sessionCoordinator.IsAuthenticated)
+        {
+            return;
+        }
+
+        PersistSettings("Project script library updated.");
     }
 
     private void LoadStartupSequenceEntries()

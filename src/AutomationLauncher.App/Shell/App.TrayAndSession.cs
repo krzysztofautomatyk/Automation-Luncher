@@ -161,7 +161,7 @@ public partial class App : System.Windows.Application
                 return;
         }
 
-        MarkErrorControlFile("Manual archive request failed.");
+        await MarkErrorControlFileAsync("Manual archive request failed.");
         _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Archive failed. Error marker created.", ToolTipIcon.Error);
     }
 

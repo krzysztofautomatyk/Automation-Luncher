@@ -8,10 +8,10 @@ namespace AutomationLauncher.App;
 
 public partial class App : System.Windows.Application
 {
-    private void InitializeHostControlFlow()
+    private async Task InitializeHostControlFlowAsync()
     {
         DeleteControlCommandFiles();
-        EnsureRunControlFileExists();
+        await EnsureRunControlFileExistsAsync();
         RefreshErrorMarkerState();
         NormalizeHostControlState();
         StartStartupControlFileMonitor();
@@ -34,7 +34,7 @@ public partial class App : System.Windows.Application
         if (_isHandlingControlSignal)
             return;
 
-        EnsureRunControlFileExists();
+        await EnsureRunControlFileExistsAsync();
         RefreshErrorMarkerState();
 
         var startFilePath = GetControlFilePath("start");
@@ -92,6 +92,13 @@ public partial class App : System.Windows.Application
             if (_host is null)
                 return;
 
+            var settings = _host.Services.GetRequiredService<AutomationLauncherSettings>();
+            if (!await TryRunControlFilePhaseAsync(settings, "start", isPreExecution: true, "start command pre-execution sequence aborted the control flow."))
+            {
+                SetTrayIndicatorMode(GetPreferredTrayIndicatorMode());
+                return;
+            }
+
             SetTrayIndicatorMode(TrayIndicatorMode.Startup);
 
             if (_isStartupSequenceRunning || _hostControlState == HostControlState.Running || _hostControlState == HostControlState.Stopping)
@@ -100,14 +107,14 @@ public partial class App : System.Windows.Application
                 return;
             }
 
-            var settings = _host.Services.GetRequiredService<AutomationLauncherSettings>();
             _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Start command detected. Running startup automation.", ToolTipIcon.Info);
             await RunStartupSequenceAsync(settings, "Preparing startup automation from control file...");
+            await TryRunControlFilePhaseAsync(settings, "start", isPreExecution: false, "start command post-execution sequence aborted further control flow.");
         }
         catch (Exception ex)
         {
             Log.Logger.Error(ex, "Start command handling failed");
-            MarkErrorControlFile($"Start command handling failed: {ex.Message}");
+            await MarkErrorControlFileAsync($"Start command handling failed: {ex.Message}");
             _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Start command handling failed. Error marker created.", ToolTipIcon.Error);
         }
     }
@@ -116,6 +123,13 @@ public partial class App : System.Windows.Application
     {
         try
         {
+            var settings = _host?.Services.GetService<AutomationLauncherSettings>();
+            if (settings is not null && !await TryRunControlFilePhaseAsync(settings, "stop", isPreExecution: true, "stop command pre-execution sequence aborted the control flow."))
+            {
+                SetTrayIndicatorMode(GetPreferredTrayIndicatorMode());
+                return;
+            }
+
             SetTrayIndicatorMode(TrayIndicatorMode.StopPending);
 
             if (_hostControlState != HostControlState.Running && !_isStartupSequenceRunning)
@@ -145,14 +159,18 @@ public partial class App : System.Windows.Application
 
             await StopTrackedStartupProcessesAsync();
             TransitionHostControlState(HostControlState.Ready, "Managed applications were stopped.");
-            WriteControlFile(GetControlFilePath("ready"));
+            await WriteControlFileWithAutomationAsync("ready", settings);
             SetTrayIndicatorMode(TrayIndicatorMode.None);
             _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Startup applications were stopped. Ready marker created.", ToolTipIcon.Info);
+            if (settings is not null)
+            {
+                await TryRunControlFilePhaseAsync(settings, "stop", isPreExecution: false, "stop command post-execution sequence aborted further control flow.");
+            }
         }
         catch (Exception ex)
         {
             Log.Logger.Error(ex, "Stop command handling failed");
-            MarkErrorControlFile($"Stop command handling failed: {ex.Message}");
+            await MarkErrorControlFileAsync($"Stop command handling failed: {ex.Message}");
             _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Stop command handling failed. Error marker created.", ToolTipIcon.Error);
         }
     }
@@ -163,6 +181,13 @@ public partial class App : System.Windows.Application
         {
             if (_host is null)
                 return;
+
+            var settings = _host.Services.GetRequiredService<AutomationLauncherSettings>();
+            if (!await TryRunControlFilePhaseAsync(settings, "march", isPreExecution: true, "march command pre-execution sequence aborted the control flow."))
+            {
+                SetTrayIndicatorMode(GetPreferredTrayIndicatorMode());
+                return;
+            }
 
             SetTrayIndicatorMode(TrayIndicatorMode.Archiving);
 
@@ -179,7 +204,6 @@ public partial class App : System.Windows.Application
             DeleteControlFile(GetControlFilePath("archok"));
             _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "March command detected. Starting archive workflow.", ToolTipIcon.Info);
 
-            var settings = _host.Services.GetRequiredService<AutomationLauncherSettings>();
             var result = await RunArchiveWithCountdownAsync(viewModel, settings);
 
             switch (result)
@@ -189,19 +213,20 @@ public partial class App : System.Windows.Application
                     _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Archive cancelled by user.", ToolTipIcon.Info);
                     return;
                 case true:
-                    WriteControlFile(GetControlFilePath("archok"));
+                    await WriteControlFileWithAutomationAsync("archok", settings);
                     SetTrayIndicatorMode(GetPreferredTrayIndicatorMode());
                     _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Archive created successfully. Archok marker file written.", ToolTipIcon.Info);
+                    await TryRunControlFilePhaseAsync(settings, "march", isPreExecution: false, "march command post-execution sequence aborted further control flow.");
                     return;
             }
 
-            MarkErrorControlFile("March command finished without archive success.");
+            await MarkErrorControlFileAsync("March command finished without archive success.");
             _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "March command failed. Error marker created.", ToolTipIcon.Error);
         }
         catch (Exception ex)
         {
             Log.Logger.Error(ex, "March command handling failed");
-            MarkErrorControlFile($"March command handling failed: {ex.Message}");
+            await MarkErrorControlFileAsync($"March command handling failed: {ex.Message}");
             _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "March command handling failed. Error marker created.", ToolTipIcon.Error);
         }
     }

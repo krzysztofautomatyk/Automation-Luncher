@@ -131,4 +131,64 @@ public sealed class TiaPortalRuntimeCatalogTests
         Assert.Equal("V20", runtime.Version);
         Assert.Equal("Configured path", runtime.Source);
     }
+
+    [Fact]
+    public void ScansV21UsingNet48SplitAssemblyPath()
+    {
+        var options = new ArchiveOptions();
+
+        var existingFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            @"C:\Program Files\Siemens\Automation\Portal V21\PublicAPI\V21\net48\Siemens.Engineering.Base.dll"
+        };
+
+        var existingDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            @"C:\Program Files\Siemens\Automation"
+        };
+
+        var catalog = new TiaPortalRuntimeCatalog(
+            options,
+            existingFiles.Contains,
+            existingDirectories.Contains,
+            (path, pattern) => new[] { @"C:\Program Files\Siemens\Automation\Portal V21" },
+            _ => null,
+            folder => folder == Environment.SpecialFolder.ProgramFiles ? @"C:\Program Files" : @"D:\Unused");
+
+        var runtime = Assert.Single(catalog.GetAvailableRuntimes());
+
+        Assert.Equal("V21", runtime.Version);
+        Assert.Equal(@"C:\Program Files\Siemens\Automation\Portal V21\PublicAPI\V21\net48\Siemens.Engineering.Base.dll", runtime.OpennessAssemblyPath);
+        Assert.Equal("Installed scan", runtime.Source);
+    }
+
+    [Fact]
+    public void ScansV19UsingClassicAssemblyPath_WhenNet48NotPresent()
+    {
+        var options = new ArchiveOptions();
+
+        var existingFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            @"C:\Program Files\Siemens\Automation\Portal V19\PublicAPI\V19\Siemens.Engineering.dll"
+        };
+
+        var existingDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            @"C:\Program Files\Siemens\Automation"
+        };
+
+        var catalog = new TiaPortalRuntimeCatalog(
+            options,
+            existingFiles.Contains,
+            existingDirectories.Contains,
+            (path, pattern) => new[] { @"C:\Program Files\Siemens\Automation\Portal V19" },
+            _ => null,
+            folder => folder == Environment.SpecialFolder.ProgramFiles ? @"C:\Program Files" : @"D:\Unused");
+
+        var runtime = Assert.Single(catalog.GetAvailableRuntimes());
+
+        Assert.Equal("V19", runtime.Version);
+        Assert.Equal(@"C:\Program Files\Siemens\Automation\Portal V19\PublicAPI\V19\Siemens.Engineering.dll", runtime.OpennessAssemblyPath);
+        Assert.Equal("Installed scan", runtime.Source);
+    }
 }

@@ -1,0 +1,82 @@
+<Window x:Class="AutomationLauncher.App.ScriptInstructionsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Project Scripts Instructions"
+        Width="980"
+        Height="760"
+        MinWidth="820"
+        MinHeight="620"
+        WindowStartupLocation="CenterOwner"
+        Background="#F6F8FA">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Padding="18" Background="#0D1B2A" CornerRadius="12">
+            <StackPanel>
+                <TextBlock Text="Project Scripts Guide" Foreground="White" FontSize="24" FontWeight="SemiBold" />
+                <TextBlock Margin="0,8,0,0"
+                           Foreground="#D8E2EA"
+                           TextWrapping="Wrap"
+                           Text="Use project scripts for deterministic automation steps. A script succeeds when PowerShell exits with code 0. Any non-zero exit code or timeout is treated as a failure." />
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" Margin="0,16,0,0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <Border Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock FontSize="20" FontWeight="Bold" Text="How to write scripts" Foreground="#0D1B2A" />
+                        <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Text="1. Keep each script focused on one task." />
+                        <TextBlock TextWrapping="Wrap" Text="2. End successful execution with exit 0." />
+                        <TextBlock TextWrapping="Wrap" Text="3. End failures with a non-zero exit code such as exit 1." />
+                        <TextBlock TextWrapping="Wrap" Text="4. Write status information with Write-Host or Write-Error so the launcher can show useful output." />
+                        <TextBlock TextWrapping="Wrap" Text="5. Use the control-file automation editor to decide whether the launcher should continue, abort, or run the next script after each step." />
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="0,14,0,0" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock FontSize="20" FontWeight="Bold" Text="Example 1: Create a directory" Foreground="#0D1B2A" />
+                        <TextBox Margin="0,10,0,0" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Text="param([string]$Path = 'C:\Temp\LauncherDemo')&#x0a;$ErrorActionPreference = 'Stop'&#x0a;try {&#x0a;    if (-not (Test-Path $Path)) {&#x0a;        New-Item -ItemType Directory -Path $Path -Force | Out-Null&#x0a;    }&#x0a;    Write-Host &quot;Directory ready: $Path&quot;&#x0a;    exit 0&#x0a;}&#x0a;catch {&#x0a;    Write-Error $_.Exception.Message&#x0a;    exit 1&#x0a;}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="0,14,0,0" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock FontSize="20" FontWeight="Bold" Text="Example 2: Wait for a file" Foreground="#0D1B2A" />
+                        <TextBox Margin="0,10,0,0" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Text="param([string]$FilePath = 'C:\Temp\ready.txt', [int]$TimeoutSeconds = 30)&#x0a;$deadline = (Get-Date).AddSeconds($TimeoutSeconds)&#x0a;while ((Get-Date) -lt $deadline) {&#x0a;    if (Test-Path $FilePath) {&#x0a;        Write-Host &quot;File detected: $FilePath&quot;&#x0a;        exit 0&#x0a;    }&#x0a;    Start-Sleep -Seconds 1&#x0a;}&#x0a;Write-Error &quot;Timeout waiting for file: $FilePath&quot;&#x0a;exit 1" />
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="0,14,0,0" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock FontSize="20" FontWeight="Bold" Text="Example 3: Start an executable and verify it" Foreground="#0D1B2A" />
+                        <TextBox Margin="0,10,0,0" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Text="param([string]$ExePath = 'notepad.exe')&#x0a;try {&#x0a;    $process = Start-Process -FilePath $ExePath -PassThru&#x0a;    Start-Sleep -Seconds 2&#x0a;    if ($process.HasExited) {&#x0a;        Write-Error &quot;Process exited too early.&quot;&#x0a;        exit 1&#x0a;    }&#x0a;    Write-Host &quot;Process started with PID $($process.Id)&quot;&#x0a;    exit 0&#x0a;}&#x0a;catch {&#x0a;    Write-Error $_.Exception.Message&#x0a;    exit 1&#x0a;}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="0,14,0,0" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock FontSize="20" FontWeight="Bold" Text="Example 4: Validate a service status" Foreground="#0D1B2A" />
+                        <TextBox Margin="0,10,0,0" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Text="param([string]$ServiceName = 'Spooler')&#x0a;try {&#x0a;    $service = Get-Service -Name $ServiceName -ErrorAction Stop&#x0a;    if ($service.Status -ne 'Running') {&#x0a;        Write-Error &quot;Service $ServiceName is not running.&quot;&#x0a;        exit 1&#x0a;    }&#x0a;    Write-Host &quot;Service $ServiceName is running.&quot;&#x0a;    exit 0&#x0a;}&#x0a;catch {&#x0a;    Write-Error $_.Exception.Message&#x0a;    exit 1&#x0a;}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="0,14,0,0" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock FontSize="20" FontWeight="Bold" Text="Example 5: Write a machine-readable result file" Foreground="#0D1B2A" />
+                        <TextBox Margin="0,10,0,0" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" Text="param([string]$OutputFile = 'C:\Temp\launcher-result.json')&#x0a;try {&#x0a;    $result = @{&#x0a;        status = 'success'&#x0a;        finishedAt = (Get-Date).ToString('o')&#x0a;        machine = $env:COMPUTERNAME&#x0a;    } | ConvertTo-Json&#x0a;    $result | Set-Content -Path $OutputFile -Encoding UTF8&#x0a;    Write-Host &quot;Result file written to $OutputFile&quot;&#x0a;    exit 0&#x0a;}&#x0a;catch {&#x0a;    Write-Error $_.Exception.Message&#x0a;    exit 1&#x0a;}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Width="120" Height="36" Content="Close" Click="Close_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

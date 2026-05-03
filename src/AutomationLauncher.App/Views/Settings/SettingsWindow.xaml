@@ -447,6 +447,183 @@
                     </ScrollViewer>
                 </TabItem>
 
+                <TabItem Header="Project Scripts">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="12">
+                            <Border Padding="14" Background="#EEF6FF" CornerRadius="10" BorderBrush="#B8D4F0" BorderThickness="1">
+                                <TextBlock Foreground="#123A5A"
+                                           TextWrapping="Wrap"
+                                           Text="Store reusable PowerShell scripts inside protected settings. Each script can be named, edited, executed on demand, and later reused as a building block for project-specific execution sequences." />
+                            </Border>
+
+                            <Border Margin="0,10,0,0" Padding="12" Background="#FFF7ED" CornerRadius="10" BorderBrush="#F3C48A" BorderThickness="1">
+                                <TextBlock Foreground="#7C3A06"
+                                           TextWrapping="Wrap"
+                                           Text="Execution result is determined by the PowerShell process exit code. Exit code 0 means success; non-zero exit code or timeout means failure. This gives the app a deterministic success/failure signal for future sequence orchestration." />
+                            </Border>
+
+                            <Grid Margin="0,14,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="320" />
+                                    <ColumnDefinition Width="16" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Text="Script library" FontSize="20" FontWeight="Bold" Foreground="#0D1B2A" />
+
+                                        <ListBox Grid.Row="1"
+                                                 Margin="0,14,0,0"
+                                                 MinHeight="320"
+                                                 ItemsSource="{Binding ProjectScriptEntries}"
+                                                 SelectedItem="{Binding SelectedProjectScriptEntry}">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Margin="0,0,0,8" Padding="10" Background="#F8FBFF" CornerRadius="8" BorderBrush="#D7E5F2" BorderThickness="1">
+                                                        <StackPanel>
+                                                            <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
+                                                            <TextBlock Margin="0,4,0,0" Foreground="#5B6A72" Text="{Binding LastRunStatus}" TextWrapping="Wrap" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+
+                                        <StackPanel Grid.Row="2" Margin="0,14,0,0">
+                                            <Button Height="34" Content="Add script" Command="{Binding AddProjectScriptEntryCommand}" />
+                                            <Button Height="34" Margin="0,10,0,0" Content="Remove" Command="{Binding RemoveSelectedProjectScriptEntryCommand}" />
+                                            <Button Height="34" Margin="0,10,0,0" Content="Move up" Command="{Binding MoveProjectScriptEntryUpCommand}" />
+                                            <Button Height="34" Margin="0,10,0,0" Content="Move down" Command="{Binding MoveProjectScriptEntryDownCommand}" />
+                                            <Button Height="34" Margin="0,10,0,0" Content="Save scripts" Command="{Binding SaveProjectScriptsCommand}" />
+                                            <Button Height="34" Margin="0,10,0,0" Content="Export library" Command="{Binding ExportProjectScriptLibraryCommand}" />
+                                            <Button Height="34" Margin="0,10,0,0" Content="Import library" Command="{Binding ImportProjectScriptLibraryCommand}" />
+                                            <Button Height="34" Margin="0,10,0,0" Content="Instructions and examples" Command="{Binding OpenProjectScriptInstructionsCommand}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+
+                                <Border Grid.Column="2" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="150" />
+                                            <RowDefinition Height="140" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="120" />
+                                        </Grid.RowDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="180" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Grid.ColumnSpan="3" Text="Selected script" FontSize="20" FontWeight="Bold" Foreground="#0D1B2A" />
+
+                                        <TextBlock Grid.Row="1" Margin="0,14,0,0" Text="Name" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,14,0,0" Padding="8" Text="{Binding SelectedProjectScriptEntry.Name, UpdateSourceTrigger=LostFocus}" />
+
+                                        <TextBlock Grid.Row="2" Margin="0,14,0,0" Text="Timeout (s)" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBox Grid.Row="2" Grid.Column="1" Margin="0,14,10,0" Padding="8" Width="120" HorizontalAlignment="Left" Text="{Binding SelectedProjectScriptEntry.TimeoutSeconds, UpdateSourceTrigger=LostFocus}" />
+                                        <Button Grid.Row="2" Grid.Column="2" Margin="0,14,0,0" Width="150" Height="34" Content="Run selected" Command="{Binding RunSelectedProjectScriptCommand}" />
+
+                                        <TextBox Grid.Row="3"
+                                                 Grid.ColumnSpan="3"
+                                                 Margin="0,14,0,0"
+                                                 Padding="10"
+                                                 AcceptsReturn="True"
+                                                 AcceptsTab="True"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 HorizontalScrollBarVisibility="Auto"
+                                                 TextWrapping="NoWrap"
+                                                 FontFamily="Consolas"
+                                                 Text="{Binding SelectedProjectScriptEntry.ScriptBody, UpdateSourceTrigger=LostFocus}" />
+
+                                        <Grid Grid.Row="4" Grid.ColumnSpan="3" Margin="0,14,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="150" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="*" />
+                                            </Grid.RowDefinitions>
+
+                                            <TextBlock Grid.ColumnSpan="2" Text="Input parameters" FontWeight="SemiBold" />
+                                            <DataGrid Grid.Row="1"
+                                                      Grid.Column="0"
+                                                      Margin="0,10,16,0"
+                                                      AutoGenerateColumns="False"
+                                                      CanUserAddRows="False"
+                                                      HeadersVisibility="Column"
+                                                      Height="120"
+                                                      ItemsSource="{Binding SelectedProjectScriptEntry.Parameters}"
+                                                      SelectedItem="{Binding SelectedProjectScriptParameter}"
+                                                      GridLinesVisibility="Horizontal"
+                                                      SelectionMode="Single"
+                                                      SelectionUnit="FullRow"
+                                                      AlternatingRowBackground="#F8FBFF"
+                                                      RowBackground="White">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="Name" Binding="{Binding Name, UpdateSourceTrigger=LostFocus}" Width="180" />
+                                                    <DataGridTextColumn Header="Default value" Binding="{Binding DefaultValue, UpdateSourceTrigger=LostFocus}" Width="*" />
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+
+                                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,10,0,0">
+                                                <Button Height="34" Content="Add param" Command="{Binding AddProjectScriptParameterCommand}" />
+                                                <Button Height="34" Margin="0,10,0,0" Content="Remove" Command="{Binding RemoveProjectScriptParameterCommand}" CommandParameter="{Binding SelectedProjectScriptParameter}" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Border Grid.Row="5" Grid.ColumnSpan="3" Margin="0,14,0,0" Padding="12" Background="#F8FAFC" CornerRadius="8" BorderBrush="#DCE3E8" BorderThickness="1">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding ProjectScriptExecutionStatus}" TextWrapping="Wrap" />
+                                                <TextBlock Margin="0,8,0,0"
+                                                           Foreground="#5B6A72"
+                                                           TextWrapping="Wrap"
+                                                           Text="Runtime tokens: {{Runtime:ScriptName}}, {{Runtime:ControlFileType}}, {{Runtime:ExecutionPhase}}, {{Runtime:MachineName}}, {{Runtime:HostState}}, {{Runtime:AppBaseDirectory}}, {{Runtime:ControlFilesDirectory}}, {{Runtime:StartedAtUtc}}. Parameter tokens: {{Parameter:YourParameterName}}. PowerShell variables are also injected as $Runtime_MachineName and $Param_YourParameterName." />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <TextBox Grid.Row="6"
+                                                 Grid.ColumnSpan="3"
+                                                 Margin="0,14,0,0"
+                                                 Padding="10"
+                                                 IsReadOnly="True"
+                                                 AcceptsReturn="True"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 HorizontalScrollBarVisibility="Auto"
+                                                 TextWrapping="NoWrap"
+                                                 FontFamily="Consolas"
+                                                 Text="{Binding ProjectScriptPreview}" />
+
+                                        <TextBox Grid.Row="7"
+                                                 Grid.ColumnSpan="3"
+                                                 Margin="0,14,0,0"
+                                                 Padding="10"
+                                                 IsReadOnly="True"
+                                                 AcceptsReturn="True"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 HorizontalScrollBarVisibility="Auto"
+                                                 TextWrapping="Wrap"
+                                                 FontFamily="Consolas"
+                                                 Text="{Binding ProjectScriptExecutionOutput}" />
+                                    </Grid>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
                 <TabItem Header="Control Files">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="12">
@@ -526,6 +703,291 @@
                                                Text="Creates: .run, .ready, .error, .start, .stop, .march, and .archok files for the current host name." />
                                 </Grid>
                             </Border>
+
+                            <Grid Margin="0,14,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="300" />
+                                    <ColumnDefinition Width="16" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Text="Control file types" FontSize="20" FontWeight="Bold" Foreground="#0D1B2A" />
+
+                                        <ListBox Grid.Row="1"
+                                                 Margin="0,14,0,0"
+                                                 MinHeight="320"
+                                                 ItemsSource="{Binding ControlFileScriptBindings}"
+                                                 SelectedItem="{Binding SelectedControlFileScriptBinding}">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Margin="0,0,0,8" Padding="10" Background="#F8FBFF" CornerRadius="8" BorderBrush="#D7E5F2" BorderThickness="1">
+                                                        <StackPanel>
+                                                            <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
+                                                            <TextBlock Margin="0,4,0,0" Foreground="#5B6A72" TextWrapping="Wrap">
+                                                                <Run Text="Pre: " />
+                                                                <Run Text="{Binding PreExecutionSteps.Count, Mode=OneWay}" />
+                                                                <Run Text=" | Post: " />
+                                                                <Run Text="{Binding PostExecutionSteps.Count, Mode=OneWay}" />
+                                                            </TextBlock>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </Grid>
+                                </Border>
+
+                                <Grid Grid.Column="2">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="16" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="16" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <Border Grid.Row="0" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="150" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="*" />
+                                            </Grid.RowDefinitions>
+
+                                            <TextBlock Grid.ColumnSpan="2" Text="Pre-execution sequence" FontSize="20" FontWeight="Bold" Foreground="#0D1B2A" />
+
+                                            <DataGrid Grid.Row="1"
+                                                      Grid.Column="0"
+                                                      Margin="0,14,16,0"
+                                                      AutoGenerateColumns="False"
+                                                      CanUserAddRows="False"
+                                                      HeadersVisibility="Column"
+                                                      Height="250"
+                                                      ItemsSource="{Binding SelectedControlFileScriptBinding.PreExecutionSteps}"
+                                                      SelectedItem="{Binding SelectedPreControlFileScriptStep}"
+                                                      GridLinesVisibility="Horizontal"
+                                                      SelectionMode="Single"
+                                                      SelectionUnit="FullRow"
+                                                      AlternatingRowBackground="#F8FBFF"
+                                                      RowBackground="White">
+                                                <DataGrid.Columns>
+                                                    <DataGridTemplateColumn Header="Script" Width="*">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <ComboBox ItemsSource="{Binding DataContext.ProjectScriptEntries, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                          DisplayMemberPath="Name"
+                                                                          SelectedValuePath="Id"
+                                                                          SelectedValue="{Binding ScriptId}"
+                                                                          IsHitTestVisible="False"
+                                                                          Focusable="False"
+                                                                          BorderThickness="0"
+                                                                          Background="Transparent" />
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                        <DataGridTemplateColumn.CellEditingTemplate>
+                                                            <DataTemplate>
+                                                                <ComboBox ItemsSource="{Binding DataContext.ProjectScriptEntries, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                          DisplayMemberPath="Name"
+                                                                          SelectedValuePath="Id"
+                                                                          SelectedValue="{Binding ScriptId, UpdateSourceTrigger=PropertyChanged}" />
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellEditingTemplate>
+                                                    </DataGridTemplateColumn>
+                                                    <DataGridTemplateColumn Header="On success" Width="170">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding OnSuccess}" />
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                        <DataGridTemplateColumn.CellEditingTemplate>
+                                                            <DataTemplate>
+                                                                <ComboBox ItemsSource="{Binding DataContext.ControlFileScriptOutcomeActions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                          SelectedItem="{Binding OnSuccess, UpdateSourceTrigger=PropertyChanged}" />
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellEditingTemplate>
+                                                    </DataGridTemplateColumn>
+                                                    <DataGridTemplateColumn Header="On failure" Width="170">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding OnFailure}" />
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                        <DataGridTemplateColumn.CellEditingTemplate>
+                                                            <DataTemplate>
+                                                                <ComboBox ItemsSource="{Binding DataContext.ControlFileScriptOutcomeActions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                          SelectedItem="{Binding OnFailure, UpdateSourceTrigger=PropertyChanged}" />
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellEditingTemplate>
+                                                    </DataGridTemplateColumn>
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+
+                                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,14,0,0">
+                                                <Button Height="34" Content="Add step" Command="{Binding AddPreControlFileScriptStepCommand}" />
+                                                <Button Height="34" Margin="0,10,0,0" Content="Remove" Command="{Binding RemoveSelectedPreControlFileScriptStepCommand}" />
+                                                <Button Height="34" Margin="0,10,0,0" Content="Move up" Command="{Binding MovePreControlFileScriptStepUpCommand}" />
+                                                <Button Height="34" Margin="0,10,0,0" Content="Move down" Command="{Binding MovePreControlFileScriptStepDownCommand}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Grid.Row="2" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="150" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="*" />
+                                            </Grid.RowDefinitions>
+
+                                            <TextBlock Grid.ColumnSpan="2" Text="Post-execution sequence" FontSize="20" FontWeight="Bold" Foreground="#0D1B2A" />
+
+                                            <DataGrid Grid.Row="1"
+                                                      Grid.Column="0"
+                                                      Margin="0,14,16,0"
+                                                      AutoGenerateColumns="False"
+                                                      CanUserAddRows="False"
+                                                      HeadersVisibility="Column"
+                                                      Height="250"
+                                                      ItemsSource="{Binding SelectedControlFileScriptBinding.PostExecutionSteps}"
+                                                      SelectedItem="{Binding SelectedPostControlFileScriptStep}"
+                                                      GridLinesVisibility="Horizontal"
+                                                      SelectionMode="Single"
+                                                      SelectionUnit="FullRow"
+                                                      AlternatingRowBackground="#F8FBFF"
+                                                      RowBackground="White">
+                                                <DataGrid.Columns>
+                                                    <DataGridTemplateColumn Header="Script" Width="*">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <ComboBox ItemsSource="{Binding DataContext.ProjectScriptEntries, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                          DisplayMemberPath="Name"
+                                                                          SelectedValuePath="Id"
+                                                                          SelectedValue="{Binding ScriptId}"
+                                                                          IsHitTestVisible="False"
+                                                                          Focusable="False"
+                                                                          BorderThickness="0"
+                                                                          Background="Transparent" />
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                        <DataGridTemplateColumn.CellEditingTemplate>
+                                                            <DataTemplate>
+                                                                <ComboBox ItemsSource="{Binding DataContext.ProjectScriptEntries, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                          DisplayMemberPath="Name"
+                                                                          SelectedValuePath="Id"
+                                                                          SelectedValue="{Binding ScriptId, UpdateSourceTrigger=PropertyChanged}" />
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellEditingTemplate>
+                                                    </DataGridTemplateColumn>
+                                                    <DataGridTemplateColumn Header="On success" Width="170">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding OnSuccess}" />
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                        <DataGridTemplateColumn.CellEditingTemplate>
+                                                            <DataTemplate>
+                                                                <ComboBox ItemsSource="{Binding DataContext.ControlFileScriptOutcomeActions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                          SelectedItem="{Binding OnSuccess, UpdateSourceTrigger=PropertyChanged}" />
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellEditingTemplate>
+                                                    </DataGridTemplateColumn>
+                                                    <DataGridTemplateColumn Header="On failure" Width="170">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding OnFailure}" />
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                        <DataGridTemplateColumn.CellEditingTemplate>
+                                                            <DataTemplate>
+                                                                <ComboBox ItemsSource="{Binding DataContext.ControlFileScriptOutcomeActions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                          SelectedItem="{Binding OnFailure, UpdateSourceTrigger=PropertyChanged}" />
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellEditingTemplate>
+                                                    </DataGridTemplateColumn>
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+
+                                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,14,0,0">
+                                                <Button Height="34" Content="Add step" Command="{Binding AddPostControlFileScriptStepCommand}" />
+                                                <Button Height="34" Margin="0,10,0,0" Content="Remove" Command="{Binding RemoveSelectedPostControlFileScriptStepCommand}" />
+                                                <Button Height="34" Margin="0,10,0,0" Content="Move up" Command="{Binding MovePostControlFileScriptStepUpCommand}" />
+                                                <Button Height="34" Margin="0,10,0,0" Content="Move down" Command="{Binding MovePostControlFileScriptStepDownCommand}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Grid.Row="4" Padding="14" Background="#FFFFFF" CornerRadius="10" BorderBrush="#DCE3E8" BorderThickness="1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="150" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="120" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="180" />
+                                            </Grid.RowDefinitions>
+
+                                            <TextBlock Grid.ColumnSpan="2" Text="Selected step overrides and preview" FontSize="20" FontWeight="Bold" Foreground="#0D1B2A" />
+
+                                            <DataGrid Grid.Row="1"
+                                                      Grid.Column="0"
+                                                      Margin="0,14,16,0"
+                                                      AutoGenerateColumns="False"
+                                                      CanUserAddRows="False"
+                                                      HeadersVisibility="Column"
+                                                      Height="110"
+                                                      ItemsSource="{Binding ActiveControlFileScriptStep.ParameterOverrides}"
+                                                      SelectedItem="{Binding SelectedActiveControlFileParameterOverride}"
+                                                      GridLinesVisibility="Horizontal"
+                                                      SelectionMode="Single"
+                                                      SelectionUnit="FullRow"
+                                                      AlternatingRowBackground="#F8FBFF"
+                                                      RowBackground="White">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="Parameter" Binding="{Binding Name, UpdateSourceTrigger=LostFocus}" Width="180" />
+                                                    <DataGridTextColumn Header="Override value" Binding="{Binding Value, UpdateSourceTrigger=LostFocus}" Width="*" />
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+
+                                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,14,0,0">
+                                                <Button Height="34" Content="Add override" Command="{Binding AddActiveControlFileParameterOverrideCommand}" />
+                                                <Button Height="34" Margin="0,10,0,0" Content="Remove" Command="{Binding RemoveActiveControlFileParameterOverrideCommand}" CommandParameter="{Binding SelectedActiveControlFileParameterOverride}" />
+                                            </StackPanel>
+
+                                            <Border Grid.Row="2" Grid.ColumnSpan="2" Margin="0,14,0,0" Padding="12" Background="#F8FAFC" CornerRadius="8" BorderBrush="#DCE3E8" BorderThickness="1">
+                                                <TextBlock Text="{Binding ControlFileStepPreviewStatus}" TextWrapping="Wrap" />
+                                            </Border>
+
+                                            <TextBox Grid.Row="3"
+                                                     Grid.ColumnSpan="2"
+                                                     Margin="0,14,0,0"
+                                                     Padding="10"
+                                                     IsReadOnly="True"
+                                                     AcceptsReturn="True"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     HorizontalScrollBarVisibility="Auto"
+                                                     TextWrapping="NoWrap"
+                                                     FontFamily="Consolas"
+                                                     Text="{Binding ControlFileStepPreview}" />
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+                            </Grid>
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>

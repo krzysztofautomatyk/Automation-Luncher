@@ -45,6 +45,7 @@ public partial class App : System.Windows.Application
     private ToolStripMenuItem? _logoutMenuItem;
     private MainWindow? _mainWindow;
     private readonly AppSessionState _sessionState = new();
+    private readonly PowerShellScriptRunner _controlFileScriptRunner = new();
     private readonly object _startupProcessesSyncRoot = new();
     private readonly List<Process> _startupLaunchedProcesses = new();
     private DispatcherTimer? _sessionTimer;
@@ -135,7 +136,7 @@ public partial class App : System.Windows.Application
         InputManager.Current.PreProcessInput += HandlePreProcessInput;
         InitializeTrayIcon();
 
-        InitializeHostControlFlow();
+        await InitializeHostControlFlowAsync();
 
         if (!settings.Ui.StartHiddenToTray)
         {
@@ -226,6 +227,8 @@ public partial class App : System.Windows.Application
     private static void ApplyLoadedSettings(AutomationLauncherSettings target, AutomationLauncherSettings source)
     {
         target.Archive = source.Archive ?? new ArchiveOptions();
+        target.Project = source.Project ?? new ProjectSettings();
+        target.ControlFiles = source.ControlFiles ?? new ControlFilesSettings();
         target.Startup = source.Startup ?? new StartupSettings();
         target.Logging = source.Logging ?? new LoggingSettings();
         target.Ui = source.Ui ?? new UiSettings();

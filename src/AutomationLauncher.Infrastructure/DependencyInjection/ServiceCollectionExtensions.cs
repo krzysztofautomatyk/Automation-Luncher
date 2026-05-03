@@ -22,6 +22,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IOpennessVersionProvider, V17OpennessVersionProvider>();
         services.AddSingleton<IOpennessVersionProvider, V18OpennessVersionProvider>();
         services.AddSingleton<IOpennessVersionProvider, V19OpennessVersionProvider>();
+        services.AddSingleton<IOpennessVersionProvider, V20OpennessVersionProvider>();
+        services.AddSingleton<IOpennessVersionProvider, V21OpennessVersionProvider>();
         services.AddSingleton<IOpennessVersionProvider, LatestOpennessVersionProvider>();
         services.AddSingleton<ITiaPortalGateway, TiaPortalGateway>();
         services.AddSingleton<IOperationLogger>(_ => new SerilogOperationLogger(logger));

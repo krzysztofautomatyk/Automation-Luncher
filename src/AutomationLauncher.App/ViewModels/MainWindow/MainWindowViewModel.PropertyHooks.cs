@@ -37,11 +37,13 @@ public partial class MainWindowViewModel : ObservableObject
         ArchiveCommand.NotifyCanExecuteChanged();
         SyncProjectFromTiaCommand.NotifyCanExecuteChanged();
         CheckTiaConnectionCommand.NotifyCanExecuteChanged();
+        RunSelectedProjectScriptCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanUseProtectedActions));
         OnPropertyChanged(nameof(CanUseProtectedUtilities));
         OnPropertyChanged(nameof(CanLoginSession));
         OnPropertyChanged(nameof(CanRunStartupAutomationManually));
         OnPropertyChanged(nameof(CanStopManagedApplications));
+        OnPropertyChanged(nameof(CanRunSelectedProjectScript));
     }
 
     partial void OnIsStartupAutomationRunningChanged(bool value)
@@ -291,6 +293,64 @@ public partial class MainWindowViewModel : ObservableObject
     partial void OnShowErrorsAndWarningsOnlyChanged(bool value)
     {
         _ = ApplyLogFilterAsync();
+    }
+
+    partial void OnSelectedProjectScriptEntryChanged(ProjectScriptEntry? value)
+    {
+        RunSelectedProjectScriptCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanRunSelectedProjectScript));
+
+        if (value is null)
+        {
+            ProjectScriptExecutionStatus = "Select a script to edit or run it.";
+            ProjectScriptExecutionOutput = string.Empty;
+            ProjectScriptPreview = string.Empty;
+            SelectedProjectScriptParameter = null;
+            return;
+        }
+
+        SelectedProjectScriptParameter = value.Parameters.FirstOrDefault();
+        ProjectScriptExecutionStatus = value.LastRunStatus;
+        ProjectScriptExecutionOutput = value.LastOutput;
+        RefreshProjectScriptPreview();
+    }
+
+    partial void OnSelectedControlFileScriptBindingChanged(ControlFileScriptBinding? value)
+    {
+        OnPropertyChanged(nameof(HasSelectedControlFileBinding));
+
+        SelectedPreControlFileScriptStep = value?.PreExecutionSteps.FirstOrDefault();
+        SelectedPostControlFileScriptStep = value?.PostExecutionSteps.FirstOrDefault();
+    }
+
+    partial void OnSelectedPreControlFileScriptStepChanged(ControlFileScriptSequenceStep? value)
+    {
+        if (value is not null)
+        {
+            ActiveControlFileScriptPhase = "pre";
+            ActiveControlFileScriptStep = value;
+            SelectedActiveControlFileParameterOverride = value.ParameterOverrides.FirstOrDefault();
+        }
+
+        RefreshControlFileStepPreview();
+    }
+
+    partial void OnSelectedPostControlFileScriptStepChanged(ControlFileScriptSequenceStep? value)
+    {
+        if (value is not null)
+        {
+            ActiveControlFileScriptPhase = "post";
+            ActiveControlFileScriptStep = value;
+            SelectedActiveControlFileParameterOverride = value.ParameterOverrides.FirstOrDefault();
+        }
+
+        RefreshControlFileStepPreview();
+    }
+
+    partial void OnIsRunningProjectScriptChanged(bool value)
+    {
+        RunSelectedProjectScriptCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanRunSelectedProjectScript));
     }
 }
 

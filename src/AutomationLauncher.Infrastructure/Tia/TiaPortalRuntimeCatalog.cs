@@ -134,10 +134,17 @@ public sealed class TiaPortalRuntimeCatalog : ITiaPortalRuntimeCatalog
                 continue;
             }
 
+            // V15–V20: Siemens.Engineering.dll directly under PublicAPI\{version}\
             var assemblyPath = Path.Combine(portalDirectory, "PublicAPI", version, "Siemens.Engineering.dll");
             if (!_fileExists(assemblyPath))
             {
-                continue;
+                // V21+: the monolithic DLL was split; the core assembly is
+                // Siemens.Engineering.Base.dll located under PublicAPI\{version}\net48\
+                assemblyPath = Path.Combine(portalDirectory, "PublicAPI", version, "net48", "Siemens.Engineering.Base.dll");
+                if (!_fileExists(assemblyPath))
+                {
+                    continue;
+                }
             }
 
             UpsertRuntime(runtimes, new RuntimeCandidate(version, BuildDisplayName(version), assemblyPath, InstalledSource, GetVersionNumber(version), priority: 1));

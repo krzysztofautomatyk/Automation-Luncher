@@ -70,12 +70,12 @@ public partial class App : System.Windows.Application
         DeleteControlFile(GetControlFilePath("march"));
     }
 
-    private void EnsureRunControlFileExists()
+    private async Task EnsureRunControlFileExistsAsync()
     {
         var runFilePath = GetControlFilePath("run");
         if (!File.Exists(runFilePath))
         {
-            WriteControlFile(runFilePath);
+            await WriteControlFileWithAutomationAsync("run");
         }
     }
 
@@ -100,6 +100,16 @@ public partial class App : System.Windows.Application
         Log.Logger.Error("Control-flow error marker requested. Reason: {Reason}", reason);
         CleanupControlFilesExceptRun();
         WriteControlFile(GetControlFilePath("error"));
+        RefreshErrorMarkerState();
+        TransitionHostControlState(HostControlState.Error, reason);
+        SetTrayIndicatorMode(TrayIndicatorMode.Error);
+    }
+
+    private async Task MarkErrorControlFileAsync(string reason)
+    {
+        Log.Logger.Error("Control-flow error marker requested. Reason: {Reason}", reason);
+        CleanupControlFilesExceptRun();
+        await WriteControlFileWithAutomationAsync("error");
         RefreshErrorMarkerState();
         TransitionHostControlState(HostControlState.Error, reason);
         SetTrayIndicatorMode(TrayIndicatorMode.Error);
@@ -177,5 +187,32 @@ public partial class App : System.Windows.Application
         yield return GetControlFilePath("stop");
         yield return GetControlFilePath("march");
         yield return GetControlFilePath("archok");
+    }
+
+    private async Task WriteControlFileWithAutomationAsync(string controlFileType, AutomationLauncherSettings? settings = null)
+    {
+        settings ??= _host?.Services.GetService<AutomationLauncherSettings>();
+        var path = GetControlFilePath(controlFileType);
+
+        if (settings is null)
+        {
+            WriteControlFile(path);
+            return;
+        }
+
+        var preResult = await ExecuteControlFileSequenceAsync(settings, controlFileType, isPreExecution: true);
+        if (!preResult.ShouldContinueControlFlow)
+        {
+            Log.Logger.Warning("Skipped writing control file {ControlFileType} because the pre-execution sequence aborted the control flow. Details: {Details}", controlFileType, preResult.Message);
+            return;
+        }
+
+        WriteControlFile(path);
+
+        var postResult = await ExecuteControlFileSequenceAsync(settings, controlFileType, isPreExecution: false);
+        if (!postResult.ShouldContinueControlFlow)
+        {
+            Log.Logger.Warning("Post-execution sequence for control file {ControlFileType} aborted further control flow. Details: {Details}", controlFileType, postResult.Message);
+        }
     }
 }

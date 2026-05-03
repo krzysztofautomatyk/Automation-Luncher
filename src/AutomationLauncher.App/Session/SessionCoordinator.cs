@@ -131,6 +131,8 @@ public sealed class SessionCoordinator : ISessionCoordinator
     private static void ApplyLoadedSettings(AutomationLauncherSettings target, AutomationLauncherSettings source)
     {
         target.Archive = source.Archive ?? new ArchiveOptions();
+        target.Project = source.Project ?? new ProjectSettings();
+        target.ControlFiles = source.ControlFiles ?? new ControlFilesSettings();
         target.Startup = source.Startup ?? new StartupSettings();
         target.Logging = source.Logging ?? new LoggingSettings();
         target.Ui = source.Ui ?? new UiSettings();
