@@ -194,25 +194,31 @@ public partial class App : System.Windows.Application
         settings ??= _host?.Services.GetService<AutomationLauncherSettings>();
         var path = GetControlFilePath(controlFileType);
 
-        if (settings is null)
+        var orchestrator = _host?.Services.GetService<AutomationLauncher.App.Services.IControlFileScriptOrchestrator>();
+        if (orchestrator is null)
         {
             WriteControlFile(path);
             return;
         }
 
-        var preResult = await ExecuteControlFileSequenceAsync(settings, controlFileType, isPreExecution: true);
+        var directory = GetControlFilesRootDirectory();
+        var preResult = await orchestrator.ExecuteAsync(controlFileType, true, _hostControlState.ToString(), directory);
         if (!preResult.ShouldContinueControlFlow)
         {
-            Log.Logger.Warning("Skipped writing control file {ControlFileType} because the pre-execution sequence aborted the control flow. Details: {Details}", controlFileType, preResult.Message);
+            Log.Logger.Warning(
+                "Skipped writing control file {ControlFileType} because pre-execution aborted. Details: {Details}",
+                controlFileType, preResult.Message);
             return;
         }
 
         WriteControlFile(path);
 
-        var postResult = await ExecuteControlFileSequenceAsync(settings, controlFileType, isPreExecution: false);
+        var postResult = await orchestrator.ExecuteAsync(controlFileType, false, _hostControlState.ToString(), directory);
         if (!postResult.ShouldContinueControlFlow)
         {
-            Log.Logger.Warning("Post-execution sequence for control file {ControlFileType} aborted further control flow. Details: {Details}", controlFileType, postResult.Message);
+            Log.Logger.Warning(
+                "Post-execution sequence for control file {ControlFileType} aborted further control flow. Details: {Details}",
+                controlFileType, postResult.Message);
         }
     }
 }

@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-and-test:
+    name: Build & Test (.NET Framework 4.8)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.x
+            9.x
+
+      - name: Restore dependencies
+        run: dotnet restore "Automation Luncher.sln"
+
+      - name: Build
+        run: dotnet build "Automation Luncher.sln" -c Release --no-restore
+
+      - name: Test
+        run: dotnet test "Automation Luncher.sln" --no-build -c Release --verbosity normal

@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using System.Threading;
 using AutomationLauncher.Domain.Models;
+using AutomationLauncher.App.Services;
 using AutomationLauncher.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,7 +46,6 @@ public partial class App : System.Windows.Application
     private ToolStripMenuItem? _logoutMenuItem;
     private MainWindow? _mainWindow;
     private readonly AppSessionState _sessionState = new();
-    private readonly PowerShellScriptRunner _controlFileScriptRunner = new();
     private readonly object _startupProcessesSyncRoot = new();
     private readonly List<Process> _startupLaunchedProcesses = new();
     private DispatcherTimer? _sessionTimer;
@@ -115,6 +115,8 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<IAutostartService, StartupScriptAutostartService>();
                 services.AddSingleton<IStartupSequenceRunner, StartupSequenceRunner>();
                 services.AddInfrastructure(settings.Archive, Log.Logger);
+                services.AddSingleton<PowerShellScriptRunner>();
+                services.AddSingleton<IControlFileScriptOrchestrator, ControlFileScriptOrchestrator>();
                 services.AddSingleton<MainWindowViewModel>();
                 services.AddSingleton<MainWindow>();
                 services.AddTransient<AboutWindow>();
