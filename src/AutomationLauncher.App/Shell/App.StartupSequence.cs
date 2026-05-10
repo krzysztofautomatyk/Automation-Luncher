@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Windows.Forms;
+using AutomationLauncher.Domain.Contracts;
 using AutomationLauncher.Domain.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
@@ -39,27 +40,25 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        if (_isStartupSequenceRunning)
-        {
-            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Startup automation is already running.", ToolTipIcon.Info);
-            return;
-        }
-
-        if (_hostControlState == HostControlState.Running || _hostControlState == HostControlState.Stopping)
-        {
-            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Managed applications are already active. Stop them before starting a new sequence.", ToolTipIcon.Info);
-            return;
-        }
-
         var entries = settings.Startup.SequenceEntries
             .Where(entry => !string.IsNullOrWhiteSpace(entry.ExecutablePath))
             .Select(entry => entry.Clone())
             .ToList();
 
-        if (entries.Count == 0)
+        var guard = _host.Services.GetRequiredService<IHostControlGuard>();
+        var readiness = guard.CheckStart(_hostControlState, _isStartupSequenceRunning, entries.Count);
+        switch (readiness)
         {
-            _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "No startup automation items are configured.", ToolTipIcon.Warning);
-            return;
+            case HostControlCommandReadiness.AlreadyRunning:
+                _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher",
+                    _hostControlState is HostControlState.Running or HostControlState.Stopping
+                        ? "Managed applications are already active. Stop them before starting a new sequence."
+                        : "Startup automation is already running.",
+                    ToolTipIcon.Info);
+                return;
+            case HostControlCommandReadiness.NoEntriesConfigured:
+                _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "No startup automation items are configured.", ToolTipIcon.Warning);
+                return;
         }
 
         var splashWindow = _host.Services.GetRequiredService<StartupSequenceSplashWindow>();

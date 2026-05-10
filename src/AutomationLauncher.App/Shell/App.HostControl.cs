@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Windows.Forms;
+using AutomationLauncher.Domain.Contracts;
 using AutomationLauncher.Domain.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
@@ -101,9 +102,15 @@ public partial class App : System.Windows.Application
 
             SetTrayIndicatorMode(TrayIndicatorMode.Startup);
 
-            if (_isStartupSequenceRunning || _hostControlState == HostControlState.Running || _hostControlState == HostControlState.Stopping)
+            var startGuard = _host.Services.GetRequiredService<IHostControlGuard>();
+            var startEntryCount = settings.Startup.SequenceEntries.Count(e => !string.IsNullOrWhiteSpace(e.ExecutablePath));
+            var startReadiness = startGuard.CheckStart(_hostControlState, _isStartupSequenceRunning, startEntryCount);
+            if (startReadiness != HostControlCommandReadiness.Ready)
             {
-                _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Start command detected, but startup automation is already running.", ToolTipIcon.Info);
+                var startMsg = startReadiness == HostControlCommandReadiness.NoEntriesConfigured
+                    ? "No startup automation items are configured."
+                    : "Start command detected, but startup automation is already running.";
+                _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", startMsg, ToolTipIcon.Info);
                 return;
             }
 
@@ -132,7 +139,10 @@ public partial class App : System.Windows.Application
 
             SetTrayIndicatorMode(TrayIndicatorMode.StopPending);
 
-            if (_hostControlState != HostControlState.Running && !_isStartupSequenceRunning)
+            var stopGuard = _host?.Services.GetService<IHostControlGuard>();
+            var stopReadiness = stopGuard?.CheckStop(_hostControlState, _isStartupSequenceRunning)
+                ?? HostControlCommandReadiness.Ready;
+            if (stopReadiness != HostControlCommandReadiness.Ready)
             {
                 Log.Logger.Information("Stop command ignored because the launcher is not in the running state.");
                 _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Stop command ignored because no managed runtime is currently active.", ToolTipIcon.Info);
@@ -194,7 +204,9 @@ public partial class App : System.Windows.Application
             if (_host.Services.GetRequiredService<MainWindowViewModel>() is not MainWindowViewModel viewModel)
                 return;
 
-            if (viewModel.IsBusy)
+            var marchGuard = _host.Services.GetRequiredService<IHostControlGuard>();
+            var marchReadiness = marchGuard.CheckMarch(viewModel.IsBusy);
+            if (marchReadiness != HostControlCommandReadiness.Ready)
             {
                 Log.Logger.Information("March command ignored because the launcher is already busy.");
                 _notifyIcon?.ShowBalloonTip(2500, "Automation Launcher", "Archive command ignored because another operation is already running.", ToolTipIcon.Info);

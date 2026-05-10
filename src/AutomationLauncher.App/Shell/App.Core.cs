@@ -7,6 +7,8 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using System.Threading;
+using AutomationLauncher.Application.Services;
+using AutomationLauncher.Domain.Contracts;
 using AutomationLauncher.Domain.Models;
 using AutomationLauncher.App.Services;
 using AutomationLauncher.Infrastructure.DependencyInjection;
@@ -117,6 +119,7 @@ public partial class App : System.Windows.Application
                 services.AddInfrastructure(settings.Archive, Log.Logger);
                 services.AddSingleton<PowerShellScriptRunner>();
                 services.AddSingleton<IControlFileScriptOrchestrator, ControlFileScriptOrchestrator>();
+                services.AddSingleton<IHostControlGuard, HostControlGuard>();
                 services.AddSingleton<MainWindowViewModel>();
                 services.AddSingleton<MainWindow>();
                 services.AddTransient<AboutWindow>();
