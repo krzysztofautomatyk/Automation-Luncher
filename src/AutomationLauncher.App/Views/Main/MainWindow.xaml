@@ -332,11 +332,15 @@
                             <TextBlock Text="{Binding HostErrorFilePath}" Foreground="#90A4B0" FontSize="11" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,2,0,0" />
                         </StackPanel>
 
-                        <TextBlock Grid.Row="8" Text="Start / Stop / March / Archok" FontSize="11" Foreground="#90A4B0" Margin="0,6,0,0" />
+                        <TextBlock Grid.Row="8" Text="Configured commands / Archok" FontSize="11" Foreground="#90A4B0" Margin="0,6,0,0" />
                         <StackPanel Grid.Row="8" Grid.Column="1" Margin="0,6,0,0">
-                            <TextBlock Text="{Binding HostStartFilePath}" Foreground="#90A4B0" FontSize="11" FontFamily="Consolas" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding HostStopFilePath}" Foreground="#90A4B0" FontSize="11" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,2,0,0" />
-                            <TextBlock Text="{Binding HostMarchFilePath}" Foreground="#90A4B0" FontSize="11" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,2,0,0" />
+                            <ItemsControl ItemsSource="{Binding HostCommandFilePaths}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Path}" Foreground="#90A4B0" FontSize="11" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,0,0,2" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                             <TextBlock Text="{Binding HostArchOkFilePath}" Foreground="#90A4B0" FontSize="11" FontFamily="Consolas" TextWrapping="Wrap" Margin="0,2,0,0" />
                         </StackPanel>
                     </Grid>

@@ -126,7 +126,7 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        await HandleStartControlFileDetectedAsync();
+        await HandleStartControlCommandDetectedAsync(GetPreferredControlCommandBinding(HostControlCommandAction.Start, "start"));
     }
 
     public async Task RunArchiveNowFromMenuAsync()
@@ -177,7 +177,7 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        await HandleStopControlFileDetectedAsync();
+        await HandleStopControlCommandDetectedAsync(GetPreferredControlCommandBinding(HostControlCommandAction.Stop, "stop"));
     }
 
     public void ExitFromDashboard()

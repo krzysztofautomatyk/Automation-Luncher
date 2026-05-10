@@ -87,7 +87,10 @@ public partial class MainWindowViewModel : ObservableObject
             var targetDirectory = Path.Combine(parentDirectory, "Control Files");
             Directory.CreateDirectory(targetDirectory);
 
-            var states = new[] { "run", "ready", "error", "start", "stop", "march", "archok" };
+            var states = new List<string> { "run", "ready", "error" };
+            states.AddRange(GetConfiguredControlFileTypes().Distinct(StringComparer.OrdinalIgnoreCase));
+            states.Add("archok");
+
             var createdCount = 0;
             foreach (var state in states)
             {

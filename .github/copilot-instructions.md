@@ -3,7 +3,7 @@
 ## Project Overview
 AutomationLauncher is a Windows desktop tray application (WPF, .NET Framework 4.8) that automates Siemens TIA Portal project archiving via the TIA Openness API.
 
-## Architecture — Clean Architecture with 4 Layers
+## Architecture — Clean Architecture with App split for testability
 
 ```
 Domain (netstandard2.0)          ← NO external dependencies
@@ -18,12 +18,14 @@ Infrastructure (net48)           ← Implements Domain contracts
   FileSystem/       ← PathService implementation
   Logging/          ← OperationLogger implementation
 
-App (net48, WPF)                 ← Depends on all layers, DI root
-  Shell/            ← Partial App class: tray icon, host control, startup sequence
+App.Core (net48, non-WPF)        ← App-layer support library
   Settings/         ← AutomationLauncherSettings, ProtectedApplicationSettingsStore (AES)
-  Session/          ← SessionCoordinator (activity tracking)
   Services/         ← Injectable helpers (ControlFileScriptOrchestrator)
   ProjectScripts/   ← PowerShellScriptRunner (control file automation)
+
+App (net48, WPF)                 ← Depends on all layers, DI root
+  Shell/            ← Partial App class: tray icon, host control, startup sequence
+  Session/          ← SessionCoordinator (activity tracking)
   ViewModels/       ← MVVM with CommunityToolkit.Mvvm
   Views/            ← WPF XAML windows
 ```
@@ -32,9 +34,11 @@ App (net48, WPF)                 ← Depends on all layers, DI root
 - Domain has NO dependencies on any other layer or NuGet packages (except .NET BCL).
 - Application depends ONLY on Domain.
 - Infrastructure depends on Domain and Application (for interfaces to implement).
+- App.Core holds non-WPF App-layer services and settings infrastructure.
 - App depends on all layers and owns the DI container root.
 - NEVER add business logic to ViewModels — it belongs in use cases.
 - NEVER add UI code to Application or Domain layers.
+- Prefer App.Core over App for settings storage, script orchestration, and other UI-independent helpers.
 
 ## Key Design Patterns
 - **Interfaces first**: All cross-layer dependencies use interfaces defined in Domain.
@@ -63,13 +67,13 @@ Follow `ArchiveProjectUseCase.cs` pattern:
 - Registered via `ServiceCollectionExtensions.AddInfrastructure()`
 - Uses Polly for any external API calls
 
-### New App-layer service → `src/AutomationLauncher.App/Services/`
-- Define interface in same folder
-- Implement in same folder
+### New App-layer service → `AutomationLauncher.App.Core`
+- Place it in the App.Core project boundary (`Services/` or `ProjectScripts/` as appropriate)
+- Define interface next to the implementation when it is App-layer specific
 - Register in `App.Core.cs` ConfigureServices
 - Use `IControlFileScriptOrchestrator` as the reference pattern
 
-### New settings property → `src/AutomationLauncher.App/Settings/AutomationLauncherSettings.cs`
+### New settings property → `src/AutomationLauncher.App.Core/Settings/AutomationLauncherSettings.cs`
 - Add to the appropriate nested settings class
 - Add documentation comment
 - Add default value in the class initializer
@@ -78,9 +82,7 @@ Follow `ArchiveProjectUseCase.cs` pattern:
 ## Control File Protocol
 The app communicates with external automation systems via hostname-based control files:
 - `HOSTNAME.run` — app is running (auto-maintained)
-- `HOSTNAME.start` → triggers startup automation sequence
-- `HOSTNAME.stop` → triggers managed application shutdown
-- `HOSTNAME.march` → triggers TIA archive workflow
+- configured command variants (defaults: `HOSTNAME.start`, `HOSTNAME.stop`, `HOSTNAME.march`) → trigger startup, stop, and archive workflows
 - `HOSTNAME.ready` → written after successful stop
 - `HOSTNAME.archok` → written after successful archive
 - `HOSTNAME.error` → written on errors

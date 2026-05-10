@@ -81,7 +81,7 @@ public partial class App : System.Windows.Application
         }
     }
 
-    private async Task<bool> ConfirmStopSequenceAsync()
+    private async Task<bool> ConfirmStopSequenceAsync(ControlFileScriptBinding? controlBinding = null)
     {
         if (_host is null)
         {
@@ -103,8 +103,7 @@ public partial class App : System.Windows.Application
         }
         void HandleConfirmRequested(object? sender, System.EventArgs e) => requestedImmediateStop = true;
 
-        splashWindow.SetApplicationTitle("Automation Launcher");
-        splashWindow.SetBackgroundImage(settings.Startup.SplashBackgroundImagePath);
+        ApplyReactionSplashSettings(splashWindow, settings, controlBinding, HostControlCommandAction.Stop, "Automation Launcher");
         splashWindow.ConfigureActions(showConfirmAction: true, confirmButtonText: "Stop now", cancelButtonText: "Keep running");
         splashWindow.ConfigureConfirmDialog("Stop startup applications now without waiting for the countdown?");
         splashWindow.ConfigureCancelDialog(
@@ -118,7 +117,8 @@ public partial class App : System.Windows.Application
 
         try
         {
-            for (var remainingSeconds = 60; remainingSeconds > 0; remainingSeconds--)
+            var countdownSeconds = GetReactionCountdownSeconds(controlBinding, HostControlCommandAction.Stop, 60);
+            for (var remainingSeconds = countdownSeconds; remainingSeconds > 0; remainingSeconds--)
             {
                 splashWindow.SetStatus($"Stop requested. Startup applications will be stopped in {remainingSeconds}s. Click Cancel to keep them running.");
                 var elapsedMilliseconds = 0;

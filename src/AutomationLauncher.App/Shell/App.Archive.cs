@@ -20,7 +20,7 @@ public partial class App : System.Windows.Application
     /// 6. Archive
     /// Returns true = success, false = failed, null = cancelled.
     /// </summary>
-    private async Task<bool?> RunArchiveWithCountdownAsync(MainWindowViewModel viewModel, AutomationLauncherSettings settings)
+    private async Task<bool?> RunArchiveWithCountdownAsync(MainWindowViewModel viewModel, AutomationLauncherSettings settings, ControlFileScriptBinding? controlBinding = null)
     {
         var splashWindow = _host!.Services.GetRequiredService<StartupSequenceSplashWindow>();
         var archiveNowRequested = false;
@@ -40,8 +40,7 @@ public partial class App : System.Windows.Application
         void HandleSaveNow(object? s, EventArgs e) => saveNowRequested = true;
         void HandleSkipSave(object? s, EventArgs e) => skipSaveRequested = true;
 
-        splashWindow.SetApplicationTitle("Automation Launcher");
-        splashWindow.SetBackgroundImage(settings.Startup.SplashBackgroundImagePath);
+        ApplyReactionSplashSettings(splashWindow, settings, controlBinding, HostControlCommandAction.Archive, "Automation Launcher");
         splashWindow.ConfigureActions(showConfirmAction: true, confirmButtonText: "Archive now", cancelButtonText: "Cancel archive");
         splashWindow.ConfigureConfirmDialog("Start archive immediately without waiting for the countdown?");
         splashWindow.ConfigureCancelDialog("Cancel archive", "Provide a reason for cancelling the archive:");
@@ -59,7 +58,8 @@ public partial class App : System.Windows.Application
         {
             // ── Phase 1: 60-second countdown — user can cancel or start now ──
             Log.Logger.Information("Archive process starting. 60 seconds to cancel or start now.");
-            for (var remaining = 60; remaining > 0; remaining--)
+            var countdownSeconds = GetReactionCountdownSeconds(controlBinding, HostControlCommandAction.Archive, 60);
+            for (var remaining = countdownSeconds; remaining > 0; remaining--)
             {
                 splashWindow.SetStatus($"Archive process starting in {remaining}s. Click 'Archive now' to proceed or 'Cancel' to abort.");
                 var elapsed = 0;

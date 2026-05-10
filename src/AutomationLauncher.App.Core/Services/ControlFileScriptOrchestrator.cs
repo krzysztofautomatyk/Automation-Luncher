@@ -56,8 +56,14 @@ public sealed class ControlFileScriptOrchestrator : IControlFileScriptOrchestrat
                     : ControlFileScriptResult.Continue(missingMessage);
             }
 
-            var scriptLabel = string.IsNullOrWhiteSpace(script.Name) ? script.Id : script.Name;
-            var context = BuildContext(script, step, controlFileType, phase, hostControlState, controlFilesDirectory);
+            var scriptLabel = ProjectScriptExecutionContextFactory.GetScriptLabel(script);
+            var context = ProjectScriptExecutionContextFactory.CreateForControlFile(
+                script,
+                step,
+                controlFileType,
+                phase,
+                hostControlState,
+                controlFilesDirectory);
             var runResult = await _scriptRunner.RunAsync(script.ScriptBody, script.TimeoutSeconds, context, cancellationToken);
             var action = runResult.IsSuccess ? step.OnSuccess : step.OnFailure;
 
@@ -77,37 +83,5 @@ public sealed class ControlFileScriptOrchestrator : IControlFileScriptOrchestrat
         }
 
         return ControlFileScriptResult.Continue("All configured script steps finished.");
-    }
-
-    private static PowerShellScriptExecutionContext BuildContext(
-        ProjectScriptEntry script,
-        ControlFileScriptSequenceStep step,
-        string controlFileType,
-        string phase,
-        string hostControlState,
-        string controlFilesDirectory)
-    {
-        var parameterMap = script.Parameters.ToDictionary(
-            p => p.Name,
-            p => p.DefaultValue ?? string.Empty,
-            StringComparer.OrdinalIgnoreCase);
-
-        foreach (var overrideEntry in step.ParameterOverrides.Where(o => !string.IsNullOrWhiteSpace(o.Name)))
-        {
-            parameterMap[overrideEntry.Name] = overrideEntry.Value ?? string.Empty;
-        }
-
-        return new PowerShellScriptExecutionContext
-        {
-            ScriptName = string.IsNullOrWhiteSpace(script.Name) ? script.Id : script.Name,
-            ControlFileType = controlFileType,
-            ExecutionPhase = phase,
-            MachineName = Environment.MachineName,
-            HostState = hostControlState,
-            AppBaseDirectory = AppContext.BaseDirectory,
-            ControlFilesDirectory = controlFilesDirectory,
-            StartedAtUtc = DateTimeOffset.UtcNow,
-            Parameters = parameterMap
-        };
     }
 }

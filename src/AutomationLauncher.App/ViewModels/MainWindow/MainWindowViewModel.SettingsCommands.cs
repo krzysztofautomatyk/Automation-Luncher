@@ -79,7 +79,7 @@ public partial class MainWindowViewModel : ObservableObject
             if (importedSettings is null)
                 throw new System.InvalidOperationException("Imported settings file is empty or invalid.");
 
-            ApplyLoadedSettings(_settings, importedSettings);
+            AutomationLauncherSettingsApplicator.ApplyLoadedSettings(_settings, importedSettings);
             _protectedSettingsStore.Save(_settings, password);
             ReloadFromSettings();
             _ = RefreshFileLogsAsync(forceRefresh: true);
@@ -125,16 +125,6 @@ public partial class MainWindowViewModel : ObservableObject
             WriteIndented = true,
             PropertyNameCaseInsensitive = true
         };
-    }
-
-    private static void ApplyLoadedSettings(AutomationLauncherSettings target, AutomationLauncherSettings source)
-    {
-        target.Archive = source.Archive ?? new ArchiveOptions();
-        target.Project = source.Project ?? new ProjectSettings();
-        target.ControlFiles = source.ControlFiles ?? new ControlFilesSettings();
-        target.Startup = source.Startup ?? new StartupSettings();
-        target.Logging = source.Logging ?? new LoggingSettings();
-        target.Ui = source.Ui ?? new UiSettings();
     }
 
     private ArchiveBackupFlow ParseArchiveBackupFlow()

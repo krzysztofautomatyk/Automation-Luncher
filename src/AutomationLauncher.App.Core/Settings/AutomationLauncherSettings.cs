@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Text.Json.Serialization;
 using AutomationLauncher.Domain.Models;
@@ -155,6 +156,14 @@ public enum ControlFileScriptOutcomeAction
     RunNextScript
 }
 
+public enum HostControlCommandAction
+{
+    Unspecified = 0,
+    Start,
+    Stop,
+    Archive
+}
+
 public partial class ControlFileScriptSequenceStep : ObservableObject
 {
     [ObservableProperty]
@@ -200,38 +209,82 @@ public partial class ControlFileScriptParameterOverrideEntry : ObservableObject
 
 public partial class ControlFileScriptBinding : ObservableObject
 {
-    public static IReadOnlyList<string> KnownControlFileTypes { get; } = new[]
+    public static IReadOnlyList<string> ReservedMarkerTypes { get; } = new[]
     {
-        "start",
-        "stop",
-        "march"
+        "run",
+        "ready",
+        "error",
+        "archok"
     };
 
     [ObservableProperty]
     private string controlFileType = string.Empty;
+
+    [ObservableProperty]
+    private string displayName = string.Empty;
+
+    [ObservableProperty]
+    private HostControlCommandAction action = HostControlCommandAction.Unspecified;
+
+    [ObservableProperty]
+    private string splashTitle = string.Empty;
+
+    [ObservableProperty]
+    private string splashBackgroundImagePath = string.Empty;
+
+    [ObservableProperty]
+    private int splashCountdownSeconds = -1;
 
     public ObservableCollection<ControlFileScriptSequenceStep> PreExecutionSteps { get; set; } = new();
 
     public ObservableCollection<ControlFileScriptSequenceStep> PostExecutionSteps { get; set; } = new();
 
     [JsonIgnore]
-    public string DisplayName => ControlFileType switch
+    public string EffectiveDisplayName
     {
-        "run" => "RUN marker (.run)",
-        "ready" => "READY marker (.ready)",
-        "error" => "ERROR marker (.error)",
-        "start" => "START command (.start)",
-        "stop" => "STOP command (.stop)",
-        "march" => "MARCH command (.march)",
-        "archok" => "ARCHOK marker (.archok)",
-        _ => ControlFileType
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(DisplayName))
+            {
+                return DisplayName.Trim();
+            }
+
+            return BuildDefaultDisplayName(Action, ControlFileType);
+        }
+    }
+
+    [JsonIgnore]
+    public string ActionDisplayName => Action switch
+    {
+        HostControlCommandAction.Start => "Start",
+        HostControlCommandAction.Stop => "Stop",
+        HostControlCommandAction.Archive => "Archive",
+        _ => "Unspecified"
     };
+
+    [JsonIgnore]
+    public string CommandDescriptor => $"{ActionDisplayName} | .{ControlFileType}";
+
+    [JsonIgnore]
+    public string EffectiveSplashTitle => string.IsNullOrWhiteSpace(SplashTitle)
+        ? BuildDefaultSplashTitle(Action)
+        : SplashTitle.Trim();
+
+    [JsonIgnore]
+    public string SplashDescriptor => SplashCountdownSeconds == 0
+        ? "Splash: immediate"
+        : $"Splash: {SplashCountdownSeconds}s";
 
     public ControlFileScriptBinding Clone()
     {
         return new ControlFileScriptBinding
         {
             ControlFileType = ControlFileType,
+            DisplayName = DisplayName,
+            Action = Action,
+            SplashTitle = SplashTitle,
+            SplashBackgroundImagePath = SplashBackgroundImagePath,
+            SplashCountdownSeconds = SplashCountdownSeconds,
             PreExecutionSteps = new ObservableCollection<ControlFileScriptSequenceStep>(PreExecutionSteps.Select(step => step.Clone())),
             PostExecutionSteps = new ObservableCollection<ControlFileScriptSequenceStep>(PostExecutionSteps.Select(step => step.Clone()))
         };
@@ -239,9 +292,116 @@ public partial class ControlFileScriptBinding : ObservableObject
 
     public static List<ControlFileScriptBinding> CreateDefaultBindings()
     {
-        return KnownControlFileTypes
-            .Select(type => new ControlFileScriptBinding { ControlFileType = type })
-            .ToList();
+        return new List<ControlFileScriptBinding>
+        {
+            new() { ControlFileType = "start", Action = HostControlCommandAction.Start },
+            new() { ControlFileType = "stop", Action = HostControlCommandAction.Stop },
+            new() { ControlFileType = "march", Action = HostControlCommandAction.Archive }
+        };
+    }
+
+    public static string BuildDefaultDisplayName(HostControlCommandAction action, string? controlFileType)
+    {
+        var normalizedType = string.IsNullOrWhiteSpace(controlFileType)
+            ? "command"
+            : controlFileType!.Trim();
+
+        return action switch
+        {
+            HostControlCommandAction.Start => $"Start command (.{normalizedType})",
+            HostControlCommandAction.Stop => $"Stop command (.{normalizedType})",
+            HostControlCommandAction.Archive => $"Archive command (.{normalizedType})",
+            _ => $"Control command (.{normalizedType})"
+        };
+    }
+
+    public static string BuildDefaultSplashTitle(HostControlCommandAction action)
+    {
+        return action switch
+        {
+            HostControlCommandAction.Start => "Automation Launcher - Startup",
+            HostControlCommandAction.Stop => "Automation Launcher - Stop",
+            HostControlCommandAction.Archive => "Automation Launcher - Archive",
+            _ => "Automation Launcher"
+        };
+    }
+
+    public static int BuildDefaultSplashCountdownSeconds(HostControlCommandAction action)
+    {
+        return action switch
+        {
+            HostControlCommandAction.Start => 10,
+            HostControlCommandAction.Stop => 60,
+            HostControlCommandAction.Archive => 60,
+            _ => 10
+        };
+    }
+
+    public static bool TryNormalizeControlFileType(string? controlFileType, out string normalizedControlFileType)
+    {
+        normalizedControlFileType = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(controlFileType))
+        {
+            return false;
+        }
+
+        var candidate = controlFileType!.Trim().TrimStart('.').ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(candidate) || candidate.Contains('.'))
+        {
+            return false;
+        }
+
+        if (candidate.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+            || candidate.Any(char.IsWhiteSpace)
+            || candidate.Contains(Path.DirectorySeparatorChar)
+            || candidate.Contains(Path.AltDirectorySeparatorChar))
+        {
+            return false;
+        }
+
+        normalizedControlFileType = candidate;
+        return true;
+    }
+
+    public static bool IsReservedMarkerType(string? controlFileType)
+    {
+        return ReservedMarkerTypes.Contains(controlFileType ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+    }
+
+    partial void OnControlFileTypeChanged(string value)
+    {
+        OnPropertyChanged(nameof(EffectiveDisplayName));
+        OnPropertyChanged(nameof(CommandDescriptor));
+    }
+
+    partial void OnDisplayNameChanged(string value)
+    {
+        OnPropertyChanged(nameof(EffectiveDisplayName));
+    }
+
+    partial void OnActionChanged(HostControlCommandAction value)
+    {
+        if (SplashCountdownSeconds < 0)
+        {
+            SplashCountdownSeconds = BuildDefaultSplashCountdownSeconds(value);
+        }
+
+        OnPropertyChanged(nameof(EffectiveDisplayName));
+        OnPropertyChanged(nameof(ActionDisplayName));
+        OnPropertyChanged(nameof(CommandDescriptor));
+        OnPropertyChanged(nameof(EffectiveSplashTitle));
+        OnPropertyChanged(nameof(SplashDescriptor));
+    }
+
+    partial void OnSplashTitleChanged(string value)
+    {
+        OnPropertyChanged(nameof(EffectiveSplashTitle));
+    }
+
+    partial void OnSplashCountdownSecondsChanged(int value)
+    {
+        OnPropertyChanged(nameof(SplashDescriptor));
     }
 }
 

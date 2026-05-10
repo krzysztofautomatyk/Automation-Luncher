@@ -1,20 +1,25 @@
 # AutomationLauncher — Architecture
 
 ## Overview
-AutomationLauncher is a Windows desktop tray application (.NET Framework 4.8, WPF) for automating Siemens TIA Portal project archiving. It follows **Clean Architecture** with strict layer separation.
+AutomationLauncher is a Windows desktop tray application (.NET Framework 4.8, WPF) for automating Siemens TIA Portal project archiving. It follows **Clean Architecture** with strict layer separation. The App layer is split into a non-WPF support library (`AutomationLauncher.App.Core`) and the WPF shell (`AutomationLauncher.App`) so that settings infrastructure and script orchestration stay testable outside the UI host.
 
 ## Layer Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  AutomationLauncher.App  (net48, WPF)                           │
+│  AutomationLauncher.App  (net48, WPF shell)                     │
 │  ┌─────────────┐  ┌──────────────┐  ┌──────────────────────┐   │
-│  │  Shell/     │  │  ViewModels/ │  │  Services/           │   │
-│  │  (App.*.cs) │  │  (MVVM)      │  │  (injectable helpers)│   │
+│  │  Shell/     │  │  ViewModels/ │  │  Views/              │   │
+│  │  (App.*.cs) │  │  (MVVM)      │  │  (WPF windows)       │   │
 │  └─────────────┘  └──────────────┘  └──────────────────────┘   │
-│  ┌─────────────┐  ┌──────────────┐                             │
-│  │  Settings/  │  │  Views/ (WPF)│                             │
-│  └─────────────┘  └──────────────┘                             │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ depends on
+┌──────────────────────────▼──────────────────────────────────────┐
+│  AutomationLauncher.App.Core  (net48, non-WPF App services)     │
+│  ┌─────────────────────┐  ┌──────────────────────────────────┐  │
+│  │  Settings/          │  │  Services/ / ProjectScripts/     │  │
+│  │  Protected store    │  │  Control-file orchestration      │  │
+│  └─────────────────────┘  └──────────────────────────────────┘  │
 └──────────────────────────┬──────────────────────────────────────┘
                            │ depends on
 ┌──────────────────────────▼──────────────────────────────────────┐
@@ -52,7 +57,8 @@ AutomationLauncher is a Windows desktop tray application (.NET Framework 4.8, WP
 | Domain | Nothing (BCL only) |
 | Application | Domain |
 | Infrastructure | Domain, Application |
-| App | Domain, Application, Infrastructure |
+| App.Core | Domain |
+| App | App.Core, Domain, Application, Infrastructure |
 
 Violations of these rules are build errors (enforced by project references).
 
@@ -60,8 +66,8 @@ Violations of these rules are build errors (enforced by project references).
 
 ### Archive Flow
 ```
-User / .march control file
-    → App.HostControl.cs: HandleMarchControlFileDetectedAsync
+User / configured archive control file (default: .march)
+    → App.HostControl.cs: HandleArchiveControlCommandDetectedAsync
     → App.Archive.cs: RunArchiveWithCountdownAsync (UI countdown + splash)
     → MainWindowViewModel.RunArchiveFromControlFileWithResultAsync
     → ArchiveProjectUseCase.ExecuteAsync
@@ -77,7 +83,7 @@ User / .march control file
 
 ### Host Control File Protocol
 ```
-External system writes  HOSTNAME.march
+External system writes configured archive command file (default: HOSTNAME.march)
 App timer (3s poll) detects file → consumes it → runs archive flow
 App writes HOSTNAME.archok or HOSTNAME.error
 ```
@@ -98,6 +104,7 @@ Settings are layered:
 1. `appsettings.json` — default values (shipped with app)
 2. `%LocalAppData%\AutomationLauncher\settings-cache.json` — cached settings (written on save)
 3. `%LocalAppData%\AutomationLauncher\protected-settings.json` — AES-256-CBC encrypted settings
+4. `%LocalAppData%\AutomationLauncher\user-settings.json` — legacy path read only for migration and removed when protected/cache files are already present
 
 The protected settings file uses PBKDF2/SHA256 (100,000 iterations) for key derivation and constant-time comparison for password verification.
 
@@ -105,6 +112,7 @@ The protected settings file uses PBKDF2/SHA256 (100,000 iterations) for key deri
 | Component | Technology |
 |---|---|
 | UI Framework | WPF (.NET Framework 4.8) |
+| App support library | `AutomationLauncher.App.Core` (net48) |
 | MVVM | CommunityToolkit.Mvvm 8.2.2 |
 | DI Container | Microsoft.Extensions.DependencyInjection |
 | Hosting | Microsoft.Extensions.Hosting |

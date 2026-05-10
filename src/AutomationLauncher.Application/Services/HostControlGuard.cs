@@ -44,7 +44,7 @@ public sealed class HostControlGuard : IHostControlGuard
     }
 
     /// <inheritdoc/>
-    public HostControlCommandReadiness CheckMarch(bool isArchiveBusy)
+    public HostControlCommandReadiness CheckArchive(bool isArchiveBusy)
     {
         return isArchiveBusy
             ? HostControlCommandReadiness.AlreadyRunning

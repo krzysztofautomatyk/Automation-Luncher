@@ -14,7 +14,9 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, ArchiveOptions options, ILogger logger)
     {
         services.AddSingleton(options);
+        services.AddSingleton(logger);
         services.AddSingleton<IPathService, PathService>();
+        services.AddSingleton<IArchiveArtifactService, ArchiveArtifactService>();
         services.AddSingleton<ITiaPortalRuntimeCatalog, TiaPortalRuntimeCatalog>();
         services.AddSingleton<TiaPortalRuntimeResolver>();
         services.AddSingleton<IOpennessVersionProvider, V15OpennessVersionProvider>();

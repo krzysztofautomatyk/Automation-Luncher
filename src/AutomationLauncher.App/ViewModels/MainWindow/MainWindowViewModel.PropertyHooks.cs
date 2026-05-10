@@ -64,10 +64,8 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(HostRunFilePath));
         OnPropertyChanged(nameof(HostReadyFilePath));
         OnPropertyChanged(nameof(HostErrorFilePath));
-        OnPropertyChanged(nameof(HostStartFilePath));
-        OnPropertyChanged(nameof(HostStopFilePath));
-        OnPropertyChanged(nameof(HostMarchFilePath));
         OnPropertyChanged(nameof(HostArchOkFilePath));
+        OnPropertyChanged(nameof(HostCommandFilePaths));
     }
 
     partial void OnControlFilesFolderPathChanged(string value)
@@ -75,10 +73,8 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(HostRunFilePath));
         OnPropertyChanged(nameof(HostReadyFilePath));
         OnPropertyChanged(nameof(HostErrorFilePath));
-        OnPropertyChanged(nameof(HostStartFilePath));
-        OnPropertyChanged(nameof(HostStopFilePath));
-        OnPropertyChanged(nameof(HostMarchFilePath));
         OnPropertyChanged(nameof(HostArchOkFilePath));
+        OnPropertyChanged(nameof(HostCommandFilePaths));
 
         if (_isInitializing || !_sessionCoordinator.IsAuthenticated)
         {

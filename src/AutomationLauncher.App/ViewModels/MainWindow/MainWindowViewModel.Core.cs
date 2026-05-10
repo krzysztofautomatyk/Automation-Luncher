@@ -12,6 +12,7 @@ using System.Windows.Threading;
 using AutomationLauncher.Application.UseCases;
 using AutomationLauncher.Domain.Contracts;
 using AutomationLauncher.Domain.Models;
+using AutomationLauncher.App.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Serilog;
@@ -31,8 +32,8 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly AppSessionState _sessionState;
     private readonly ISessionCoordinator _sessionCoordinator;
     private readonly IAutostartService _autostartService;
+    private readonly IProjectScriptWorkflowService _projectScriptWorkflowService;
     private readonly AutomationLauncherSettings _settings;
-    private readonly PowerShellScriptRunner _powerShellScriptRunner = new();
     private readonly DispatcherTimer _sessionCountdownTimer;
     private readonly DispatcherTimer _fileLogRefreshTimer;
     private readonly List<string> _allFileLogLines = new();
@@ -284,6 +285,13 @@ public partial class MainWindowViewModel : ObservableObject
         ControlFileScriptOutcomeAction.RunNextScript
     };
 
+    public ObservableCollection<HostControlCommandAction> ControlFileCommandActions { get; } = new()
+    {
+        HostControlCommandAction.Start,
+        HostControlCommandAction.Stop,
+        HostControlCommandAction.Archive
+    };
+
     public ObservableCollection<string> LogLevels { get; } = new()
     {
         "Verbose",
@@ -304,6 +312,7 @@ public partial class MainWindowViewModel : ObservableObject
         AppSessionState sessionState,
         ISessionCoordinator sessionCoordinator,
         IAutostartService autostartService,
+        IProjectScriptWorkflowService projectScriptWorkflowService,
         AutomationLauncherSettings settings)
     {
         _archiveProjectUseCase = archiveProjectUseCase;
@@ -313,6 +322,7 @@ public partial class MainWindowViewModel : ObservableObject
         _sessionState = sessionState;
         _sessionCoordinator = sessionCoordinator;
         _autostartService = autostartService;
+        _projectScriptWorkflowService = projectScriptWorkflowService;
         _settings = settings;
 
         _log = Log.ForContext<MainWindowViewModel>();
@@ -403,19 +413,31 @@ public partial class MainWindowViewModel : ObservableObject
 
     public string HostErrorFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.error");
 
-    public string HostStartFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.start");
-
-    public string HostStopFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.stop");
-
-    public string HostMarchFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.march");
-
     public string HostArchOkFilePath => Path.Combine(ControlFilesFolderPath, $"{HostName}.archok");
+
+    public IReadOnlyList<HostControlFilePathPreviewEntry> HostCommandFilePaths => BuildHostCommandFilePaths();
+
+    public string ControlFileCreationSummary => BuildControlFileCreationSummary();
 
     private static string ResolveControlFilesDirectory(string? configuredDirectory)
     {
-        var candidate = string.IsNullOrWhiteSpace(configuredDirectory)
-            ? AppContext.BaseDirectory
-            : configuredDirectory.Trim();
+        var fallbackDirectory = AppContext.BaseDirectory ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(fallbackDirectory))
+        {
+            fallbackDirectory = Environment.CurrentDirectory ?? ".";
+        }
+
+        if (string.IsNullOrWhiteSpace(fallbackDirectory))
+        {
+            fallbackDirectory = ".";
+        }
+
+        var candidate = fallbackDirectory;
+        var trimmedConfiguredDirectory = configuredDirectory?.Trim();
+        if (!string.IsNullOrWhiteSpace(trimmedConfiguredDirectory))
+        {
+            candidate = trimmedConfiguredDirectory!;
+        }
 
         try
         {
@@ -423,7 +445,78 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch
         {
-            return AppContext.BaseDirectory;
+            return fallbackDirectory;
         }
     }
+
+    private IReadOnlyList<HostControlFilePathPreviewEntry> BuildHostCommandFilePaths()
+    {
+        var entries = new List<HostControlFilePathPreviewEntry>();
+        var seenTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var controlFileType in GetConfiguredControlFileTypes())
+        {
+            if (!seenTypes.Add(controlFileType))
+            {
+                continue;
+            }
+
+            var binding = ControlFileScriptBindings.FirstOrDefault(item =>
+                string.Equals(item.ControlFileType, controlFileType, StringComparison.OrdinalIgnoreCase));
+            var displayName = binding?.EffectiveDisplayName ?? $".{controlFileType}";
+            entries.Add(new HostControlFilePathPreviewEntry(
+                displayName,
+                Path.Combine(ControlFilesFolderPath, $"{HostName}.{controlFileType}")));
+        }
+
+        return entries;
+    }
+
+    private string BuildControlFileCreationSummary()
+    {
+        var fileTypes = new List<string> { ".run", ".ready", ".error" };
+        fileTypes.AddRange(GetConfiguredControlFileTypes().Select(controlFileType => $".{controlFileType}"));
+        fileTypes.Add(".archok");
+        return $"Creates: {FormatHumanReadableList(fileTypes)} files for the current host name.";
+    }
+
+    private IEnumerable<string> GetConfiguredControlFileTypes()
+    {
+        var seenTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var binding in ControlFileScriptBindings)
+        {
+            if (binding is null
+                || !ControlFileScriptBinding.TryNormalizeControlFileType(binding.ControlFileType, out var normalizedType)
+                || ControlFileScriptBinding.IsReservedMarkerType(normalizedType)
+                || !seenTypes.Add(normalizedType))
+            {
+                continue;
+            }
+
+            yield return normalizedType;
+        }
+    }
+
+    private static string FormatHumanReadableList(IReadOnlyList<string> values)
+    {
+        return values.Count switch
+        {
+            0 => string.Empty,
+            1 => values[0],
+            2 => $"{values[0]} and {values[1]}",
+            _ => string.Join(", ", values.Take(values.Count - 1)) + $", and {values[values.Count - 1]}"
+        };
+    }
+}
+
+public sealed class HostControlFilePathPreviewEntry
+{
+    public HostControlFilePathPreviewEntry(string displayName, string path)
+    {
+        DisplayName = displayName;
+        Path = path;
+    }
+
+    public string DisplayName { get; }
+
+    public string Path { get; }
 }

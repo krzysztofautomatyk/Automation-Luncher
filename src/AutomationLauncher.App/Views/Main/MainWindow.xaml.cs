@@ -77,7 +77,7 @@ public partial class MainWindow : Window
         const string flowDescription =
             "Automation Launcher - Full archive flow\n\n" +
             "1) Trigger\n" +
-            "- Archive can start from dashboard, tray menu, or HOST control file (.march).\n" +
+            "- Archive can start from dashboard, tray menu, or a configured HOST control file (default: .march).\n" +
             "- If another workflow is already running, archive command is ignored.\n\n" +
             "2) Countdown splash (60s)\n" +
             "- User can click 'Archive now' to skip waiting.\n" +

@@ -67,19 +67,19 @@ public sealed class HostControlGuardTests
         Assert.Equal(HostControlCommandReadiness.NothingToStop, result);
     }
 
-    // ─── CheckMarch ──────────────────────────────────────────────────────────
+    // ─── CheckArchive ────────────────────────────────────────────────────────
 
     [Fact]
-    public void CheckMarch_WhenNotBusy_ReturnsReady()
+    public void CheckArchive_WhenNotBusy_ReturnsReady()
     {
-        var result = _guard.CheckMarch(isArchiveBusy: false);
+        var result = _guard.CheckArchive(isArchiveBusy: false);
         Assert.Equal(HostControlCommandReadiness.Ready, result);
     }
 
     [Fact]
-    public void CheckMarch_WhenBusy_ReturnsAlreadyRunning()
+    public void CheckArchive_WhenBusy_ReturnsAlreadyRunning()
     {
-        var result = _guard.CheckMarch(isArchiveBusy: true);
+        var result = _guard.CheckArchive(isArchiveBusy: true);
         Assert.Equal(HostControlCommandReadiness.AlreadyRunning, result);
     }
 }

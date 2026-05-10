@@ -624,13 +624,13 @@
                     </ScrollViewer>
                 </TabItem>
 
-                <TabItem Header="Control Files">
+                <TabItem Header="Triggers &amp; Reactions">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="12">
                             <Border Padding="14" Background="#EEF6FF" CornerRadius="10" BorderBrush="#B8D4F0" BorderThickness="1">
                                 <TextBlock Foreground="#123A5A"
                                            TextWrapping="Wrap"
-                                           Text="Control files are used by external orchestration to signal run, stop, start, march, and archive state transitions. Configure a dedicated folder and create a complete baseline set in one action." />
+                                           Text="Define which host files the launcher detects and configure the reaction for each trigger. Each trigger can map to a built-in workflow, use its own splash presentation, and run pre/post PowerShell scripts." />
                             </Border>
 
                             <Border Margin="0,10,0,0" Padding="12" Background="#FFFBF0" CornerRadius="10" BorderBrush="#F0D080" BorderThickness="1">
@@ -676,8 +676,17 @@
                                     <TextBlock Grid.Row="4" Margin="0,8,0,0" Text="Ready" FontWeight="SemiBold" />
                                     <TextBlock Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,8,0,0" Text="{Binding HostReadyFilePath}" TextWrapping="Wrap" />
 
-                                    <TextBlock Grid.Row="5" Margin="0,8,0,0" Text="Start / Stop / March" FontWeight="SemiBold" />
-                                    <TextBlock Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,8,0,0" Text="{Binding HostStartFilePath}" TextWrapping="Wrap" />
+                                    <TextBlock Grid.Row="5" Margin="0,8,0,0" Text="Configured commands" FontWeight="SemiBold" />
+                                    <ItemsControl Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,8,0,0" ItemsSource="{Binding HostCommandFilePaths}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Margin="0,0,0,8">
+                                                    <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
+                                                    <TextBlock Margin="0,2,0,0" Foreground="#5B6A72" Text="{Binding Path}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
 
                                     <TextBlock Grid.Row="6" Margin="0,8,0,0" Text="Error / Archive OK" FontWeight="SemiBold" />
                                     <StackPanel Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,8,0,0">
@@ -700,7 +709,7 @@
                                                Margin="0,10,0,0"
                                                Foreground="#5B6A72"
                                                TextWrapping="Wrap"
-                                               Text="Creates: .run, .ready, .error, .start, .stop, .march, and .archok files for the current host name." />
+                                               Text="{Binding ControlFileCreationSummary}" />
                                 </Grid>
                             </Border>
 
@@ -715,12 +724,68 @@
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
                                             <RowDefinition Height="*" />
                                         </Grid.RowDefinitions>
 
-                                        <TextBlock Text="Control file types" FontSize="20" FontWeight="Bold" Foreground="#0D1B2A" />
+                                        <TextBlock Text="Command variants" FontSize="20" FontWeight="Bold" Foreground="#0D1B2A" />
 
-                                        <ListBox Grid.Row="1"
+                                        <StackPanel Grid.Row="1" Margin="0,14,0,0" Orientation="Horizontal">
+                                            <Button Width="132" Height="34" Content="Add variant" Command="{Binding AddControlFileCommandVariantCommand}" />
+                                            <Button Width="132" Height="34" Margin="10,0,0,0" Content="Remove" Command="{Binding RemoveSelectedControlFileCommandVariantCommand}" />
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Row="2" Margin="0,14,0,0">
+                                            <TextBlock Text="Display name" FontWeight="SemiBold" />
+                                            <TextBox Margin="0,6,0,0"
+                                                     Padding="8"
+                                                     Text="{Binding SelectedControlFileScriptBinding.DisplayName, UpdateSourceTrigger=LostFocus}" />
+
+                                            <TextBlock Margin="0,12,0,0" Text="File suffix (without dot)" FontWeight="SemiBold" />
+                                            <TextBox Margin="0,6,0,0"
+                                                     Padding="8"
+                                                     Text="{Binding SelectedControlFileScriptBinding.ControlFileType, UpdateSourceTrigger=LostFocus}" />
+
+                                            <TextBlock Margin="0,12,0,0" Text="Action" FontWeight="SemiBold" />
+                                            <ComboBox Margin="0,6,0,0"
+                                                      ItemsSource="{Binding ControlFileCommandActions}"
+                                                      SelectedItem="{Binding SelectedControlFileScriptBinding.Action, UpdateSourceTrigger=PropertyChanged}" />
+
+                                            <TextBlock Margin="0,12,0,0" Text="Splash title" FontWeight="SemiBold" />
+                                            <TextBox Margin="0,6,0,0"
+                                                     Padding="8"
+                                                     Text="{Binding SelectedControlFileScriptBinding.SplashTitle, UpdateSourceTrigger=LostFocus}" />
+
+                                            <TextBlock Margin="0,12,0,0" Text="Splash background image" FontWeight="SemiBold" />
+                                            <Grid Margin="0,6,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox Grid.Column="0"
+                                                         Margin="0,0,10,0"
+                                                         Padding="8"
+                                                         Text="{Binding SelectedControlFileScriptBinding.SplashBackgroundImagePath, UpdateSourceTrigger=LostFocus}" />
+                                                <Button Grid.Column="1"
+                                                        Width="90"
+                                                        Content="Browse"
+                                                        Command="{Binding BrowseSelectedControlFileSplashBackgroundCommand}" />
+                                                <Button Grid.Column="2"
+                                                        Width="90"
+                                                        Margin="10,0,0,0"
+                                                        Content="Clear"
+                                                        Command="{Binding ClearSelectedControlFileSplashBackgroundCommand}" />
+                                            </Grid>
+
+                                            <TextBlock Margin="0,12,0,0" Text="Splash countdown (s)" FontWeight="SemiBold" />
+                                            <TextBox Margin="0,6,0,0"
+                                                     Padding="8"
+                                                     Text="{Binding SelectedControlFileScriptBinding.SplashCountdownSeconds, UpdateSourceTrigger=LostFocus}" />
+                                        </StackPanel>
+
+                                        <ListBox Grid.Row="3"
                                                  Margin="0,14,0,0"
                                                  MinHeight="320"
                                                  ItemsSource="{Binding ControlFileScriptBindings}"
@@ -729,7 +794,9 @@
                                                 <DataTemplate>
                                                     <Border Margin="0,0,0,8" Padding="10" Background="#F8FBFF" CornerRadius="8" BorderBrush="#D7E5F2" BorderThickness="1">
                                                         <StackPanel>
-                                                            <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
+                                                            <TextBlock FontWeight="SemiBold" Text="{Binding EffectiveDisplayName}" />
+                                                            <TextBlock Margin="0,4,0,0" Foreground="#5B6A72" Text="{Binding CommandDescriptor}" />
+                                                            <TextBlock Margin="0,4,0,0" Foreground="#5B6A72" Text="{Binding SplashDescriptor}" />
                                                             <TextBlock Margin="0,4,0,0" Foreground="#5B6A72" TextWrapping="Wrap">
                                                                 <Run Text="Pre: " />
                                                                 <Run Text="{Binding PreExecutionSteps.Count, Mode=OneWay}" />

@@ -2,6 +2,7 @@ using System.Linq;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using AutomationLauncher.App.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FileDialog = Microsoft.Win32.OpenFileDialog;
@@ -11,22 +12,6 @@ namespace AutomationLauncher.App;
 
 public partial class MainWindowViewModel : ObservableObject
 {
-    private PowerShellScriptExecutionContext BuildManualExecutionContext(ProjectScriptEntry script)
-    {
-        return new PowerShellScriptExecutionContext
-        {
-            ScriptName = string.IsNullOrWhiteSpace(script.Name) ? script.Id : script.Name,
-            ControlFileType = "manual",
-            ExecutionPhase = "manual",
-            MachineName = Environment.MachineName,
-            HostState = CurrentHostControlState.ToString(),
-            AppBaseDirectory = AppContext.BaseDirectory,
-            ControlFilesDirectory = ControlFilesFolderPath,
-            StartedAtUtc = DateTimeOffset.UtcNow,
-            Parameters = script.Parameters.ToDictionary(parameter => parameter.Name, parameter => parameter.DefaultValue ?? string.Empty, StringComparer.OrdinalIgnoreCase)
-        };
-    }
-
     private void RefreshProjectScriptPreview()
     {
         if (SelectedProjectScriptEntry is null)
@@ -35,7 +20,10 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        ProjectScriptPreview = _powerShellScriptRunner.PreviewScript(SelectedProjectScriptEntry.ScriptBody, BuildManualExecutionContext(SelectedProjectScriptEntry));
+        ProjectScriptPreview = _projectScriptWorkflowService.BuildManualPreview(
+            SelectedProjectScriptEntry,
+            CurrentHostControlState,
+            ControlFilesFolderPath);
     }
 
     private void RefreshControlFileStepPreview()
@@ -47,43 +35,16 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        var script = ProjectScriptEntries.FirstOrDefault(candidate => string.Equals(candidate.Id, ActiveControlFileScriptStep.ScriptId, StringComparison.OrdinalIgnoreCase));
-        if (script is null)
-        {
-            ControlFileStepPreviewStatus = "The selected step does not reference an existing script.";
-            ControlFileStepPreview = string.Empty;
-            return;
-        }
+        var preview = _projectScriptWorkflowService.BuildControlFileStepPreview(
+            ProjectScriptEntries,
+            SelectedControlFileScriptBinding,
+            ActiveControlFileScriptStep,
+            ActiveControlFileScriptPhase,
+            CurrentHostControlState,
+            ControlFilesFolderPath);
 
-        var executionContext = BuildControlFileExecutionContext(script, ActiveControlFileScriptStep, SelectedControlFileScriptBinding.ControlFileType, ActiveControlFileScriptPhase);
-        ControlFileStepPreviewStatus = $"Preview for {SelectedControlFileScriptBinding.DisplayName} ({ActiveControlFileScriptPhase}) using script '{(string.IsNullOrWhiteSpace(script.Name) ? script.Id : script.Name)}'.";
-        ControlFileStepPreview = _powerShellScriptRunner.PreviewScript(script.ScriptBody, executionContext);
-    }
-
-    private PowerShellScriptExecutionContext BuildControlFileExecutionContext(ProjectScriptEntry script, ControlFileScriptSequenceStep step, string controlFileType, string phase)
-    {
-        var parameterMap = script.Parameters.ToDictionary(
-            parameter => parameter.Name,
-            parameter => parameter.DefaultValue ?? string.Empty,
-            StringComparer.OrdinalIgnoreCase);
-
-        foreach (var overrideEntry in step.ParameterOverrides.Where(overrideEntry => !string.IsNullOrWhiteSpace(overrideEntry.Name)))
-        {
-            parameterMap[overrideEntry.Name] = overrideEntry.Value ?? string.Empty;
-        }
-
-        return new PowerShellScriptExecutionContext
-        {
-            ScriptName = string.IsNullOrWhiteSpace(script.Name) ? script.Id : script.Name,
-            ControlFileType = controlFileType,
-            ExecutionPhase = phase,
-            MachineName = Environment.MachineName,
-            HostState = CurrentHostControlState.ToString(),
-            AppBaseDirectory = AppContext.BaseDirectory,
-            ControlFilesDirectory = ControlFilesFolderPath,
-            StartedAtUtc = DateTimeOffset.UtcNow,
-            Parameters = parameterMap
-        };
+        ControlFileStepPreviewStatus = preview.Status;
+        ControlFileStepPreview = preview.Preview;
     }
 
     [RelayCommand]
@@ -197,33 +158,27 @@ public partial class MainWindowViewModel : ObservableObject
 
         try
         {
-            var executionContext = BuildManualExecutionContext(script);
+            var result = await _projectScriptWorkflowService.RunManualScriptAsync(
+                script,
+                CurrentHostControlState,
+                ControlFilesFolderPath,
+                CancellationToken.None);
 
-            var result = await _powerShellScriptRunner.RunAsync(script.ScriptBody, script.TimeoutSeconds, executionContext, CancellationToken.None);
-
-            script.LastRunFinishedAt = DateTimeOffset.Now;
+            script.LastRunFinishedAt = result.FinishedAt;
             script.LastExitCode = result.ExitCode;
             script.LastOutput = result.CombinedOutput;
-            script.LastRunStatus = result.IsSuccess
-                ? $"Success. Exit code {result.ExitCode}. Finished {script.LastRunFinishedAt:yyyy-MM-dd HH:mm:ss}."
-                : $"Failure. Exit code {result.ExitCode}. Finished {script.LastRunFinishedAt:yyyy-MM-dd HH:mm:ss}. {result.StatusMessage}";
-
-            ProjectScriptExecutionStatus = script.LastRunStatus;
+            script.LastRunStatus = result.StatusMessage;
+            ProjectScriptExecutionStatus = result.StatusMessage;
             ProjectScriptExecutionOutput = result.CombinedOutput;
 
-            AddHistory(result.IsSuccess ? "OK" : "ERROR",
-                result.IsSuccess ? "ProjectScriptSucceeded" : "ProjectScriptFailed",
-                $"{script.Name}: {script.LastRunStatus}");
-        }
-        catch (Exception ex)
-        {
-            script.LastRunFinishedAt = DateTimeOffset.Now;
-            script.LastExitCode = null;
-            script.LastOutput = ex.ToString();
-            script.LastRunStatus = $"Failure. Runner error: {ex.Message}";
-            ProjectScriptExecutionStatus = script.LastRunStatus;
-            ProjectScriptExecutionOutput = script.LastOutput;
-            AddHistory("ERROR", "ProjectScriptRunnerFailed", $"{script.Name}: {ex.Message}");
+            AddHistory(
+                result.IsSuccess ? "OK" : "ERROR",
+                result.IsSuccess
+                    ? "ProjectScriptSucceeded"
+                    : result.IsRunnerError
+                        ? "ProjectScriptRunnerFailed"
+                        : "ProjectScriptFailed",
+                $"{result.ScriptLabel}: {result.StatusMessage}");
         }
         finally
         {
@@ -306,6 +261,7 @@ public partial class MainWindowViewModel : ObservableObject
 
             _settings.Project.PowerShellScripts = package.Scripts?.Select(script => script.Clone()).ToList() ?? new List<ProjectScriptEntry>();
             _settings.ControlFiles.Bindings = package.ControlFileBindings?.Select(binding => binding.Clone()).ToList() ?? ControlFileScriptBinding.CreateDefaultBindings();
+            AutomationLauncherSettingsNormalizer.Normalize(_settings);
             ReloadFromSettings();
             PersistSettings("Script library imported.");
             SettingsStatusMessage = $"Script library imported from {dialog.FileName}";
@@ -345,6 +301,77 @@ public partial class MainWindowViewModel : ObservableObject
 
         SelectedProjectScriptEntry.Parameters.Remove(parameter);
         PersistSettings("Script parameters updated.");
+    }
+
+    [RelayCommand]
+    private void AddControlFileCommandVariant()
+    {
+        if (!EnsureAuthenticated())
+        {
+            return;
+        }
+
+        var action = SelectedControlFileScriptBinding?.Action is HostControlCommandAction.Start or HostControlCommandAction.Stop or HostControlCommandAction.Archive
+            ? SelectedControlFileScriptBinding.Action
+            : HostControlCommandAction.Start;
+        var controlFileType = GenerateUniqueControlFileType(action);
+        var binding = new ControlFileScriptBinding
+        {
+            Action = action,
+            ControlFileType = controlFileType,
+            SplashCountdownSeconds = ControlFileScriptBinding.BuildDefaultSplashCountdownSeconds(action)
+        };
+
+        ControlFileScriptBindings.Add(binding);
+        SelectedControlFileScriptBinding = binding;
+        PersistSettings("Control file command variant added.");
+    }
+
+    [RelayCommand]
+    private void RemoveSelectedControlFileCommandVariant()
+    {
+        if (!EnsureAuthenticated() || SelectedControlFileScriptBinding is null)
+        {
+            return;
+        }
+
+        var bindingToRemove = SelectedControlFileScriptBinding;
+        ControlFileScriptBindings.Remove(bindingToRemove);
+        SelectedControlFileScriptBinding = ControlFileScriptBindings.FirstOrDefault();
+        PersistSettings("Control file command variant removed.");
+    }
+
+    [RelayCommand]
+    private void BrowseSelectedControlFileSplashBackground()
+    {
+        if (!EnsureAuthenticated() || SelectedControlFileScriptBinding is null)
+        {
+            return;
+        }
+
+        var dialog = new FileDialog
+        {
+            Title = $"Select splash screen background for {SelectedControlFileScriptBinding.EffectiveDisplayName}",
+            Filter = "Images (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*"
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        SelectedControlFileScriptBinding.SplashBackgroundImagePath = dialog.FileName;
+    }
+
+    [RelayCommand]
+    private void ClearSelectedControlFileSplashBackground()
+    {
+        if (!EnsureAuthenticated() || SelectedControlFileScriptBinding is null)
+        {
+            return;
+        }
+
+        SelectedControlFileScriptBinding.SplashBackgroundImagePath = string.Empty;
     }
 
     [RelayCommand]
@@ -519,5 +546,35 @@ public partial class MainWindowViewModel : ObservableObject
 
         SelectedControlFileScriptBinding.PostExecutionSteps.Move(currentIndex, currentIndex + 1);
         PersistSettings("Post-execution control-file sequence order updated.");
+    }
+
+    private string GenerateUniqueControlFileType(HostControlCommandAction action)
+    {
+        var seed = action switch
+        {
+            HostControlCommandAction.Stop => "stop-variant",
+            HostControlCommandAction.Archive => "archive-variant",
+            _ => "start-variant"
+        };
+
+        var existingTypes = new HashSet<string>(
+            ControlFileScriptBindings
+                .Select(binding => binding.ControlFileType)
+                .Where(controlFileType => ControlFileScriptBinding.TryNormalizeControlFileType(controlFileType, out _)),
+            StringComparer.OrdinalIgnoreCase);
+
+        if (!existingTypes.Contains(seed))
+        {
+            return seed;
+        }
+
+        for (var index = 2; ; index++)
+        {
+            var candidate = $"{seed}-{index}";
+            if (!existingTypes.Contains(candidate))
+            {
+                return candidate;
+            }
+        }
     }
 }

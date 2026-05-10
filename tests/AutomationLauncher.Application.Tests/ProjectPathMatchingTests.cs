@@ -72,7 +72,7 @@ public sealed class ProjectPathMatchingTests
     }
 
     private static ArchiveProjectUseCase BuildUseCase(FakeGateway gateway)
-        => new(gateway, new FakePathService(), new FakeOperationLogger());
+        => new(gateway, new FakePathService(), new FakeArchiveArtifactService(), new FakeOperationLogger());
 
     private static ArchiveOptions DefaultOptions(string expectedPath) => new()
     {
@@ -109,6 +109,17 @@ public sealed class ProjectPathMatchingTests
         public string BuildArchiveFilePath(string projectPath, string outputDirectory, string fileNameWithoutExtension)
             => Path.Combine(outputDirectory, fileNameWithoutExtension + ".zap19");
         public void EnsureDirectoryExists(string path) { }
+    }
+
+    private sealed class FakeArchiveArtifactService : IArchiveArtifactService
+    {
+        public long? TryGetPathSizeBytes(string path) => null;
+
+        public void PrepareStableBackupTarget(string archivePath, string oldArchivePath) { }
+
+        public void FinalizeSuccessfulBackup(ArchiveOptions options, string archivePath, string? oldArchivePath, string archiveIdentity) { }
+
+        public void WriteMetricsLog(ArchiveMetricsLogEntry entry) { }
     }
 
     private sealed class FakeOperationLogger : IOperationLogger

@@ -1,0 +1,37 @@
+name: Bug report
+description: Report a defect in AutomationLauncher
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: List the exact steps needed to reproduce the problem.
+      placeholder: |
+        1. Start the app
+        2. Trigger ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include TIA version, Windows version, and any machine-specific prerequisites.
+    validations:
+      required: true

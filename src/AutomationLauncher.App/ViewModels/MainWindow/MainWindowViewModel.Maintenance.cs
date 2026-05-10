@@ -373,6 +373,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     private void AttachControlFileBinding(ControlFileScriptBinding binding)
     {
+        binding.PropertyChanged += HandleControlFileBindingPropertyChanged;
         binding.PreExecutionSteps.CollectionChanged += HandleControlFileBindingStepsChanged;
         binding.PostExecutionSteps.CollectionChanged += HandleControlFileBindingStepsChanged;
 
@@ -389,6 +390,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     private void DetachControlFileBinding(ControlFileScriptBinding binding)
     {
+        binding.PropertyChanged -= HandleControlFileBindingPropertyChanged;
         binding.PreExecutionSteps.CollectionChanged -= HandleControlFileBindingStepsChanged;
         binding.PostExecutionSteps.CollectionChanged -= HandleControlFileBindingStepsChanged;
 
@@ -445,10 +447,37 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (_isInitializing || !_sessionCoordinator.IsAuthenticated)
         {
+            OnPropertyChanged(nameof(HostCommandFilePaths));
+            OnPropertyChanged(nameof(ControlFileCreationSummary));
             return;
         }
 
+        OnPropertyChanged(nameof(HostCommandFilePaths));
+        OnPropertyChanged(nameof(ControlFileCreationSummary));
         PersistSettings("Control file script automation updated.");
+    }
+
+    private void HandleControlFileBindingPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ControlFileScriptBinding.EffectiveDisplayName)
+            || e.PropertyName == nameof(ControlFileScriptBinding.ActionDisplayName)
+            || e.PropertyName == nameof(ControlFileScriptBinding.CommandDescriptor)
+            || e.PropertyName == nameof(ControlFileScriptBinding.EffectiveSplashTitle)
+            || e.PropertyName == nameof(ControlFileScriptBinding.SplashDescriptor))
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(HostCommandFilePaths));
+        OnPropertyChanged(nameof(ControlFileCreationSummary));
+        RefreshControlFileStepPreview();
+
+        if (_isInitializing || !_sessionCoordinator.IsAuthenticated)
+        {
+            return;
+        }
+
+        PersistSettings("Control file command variants updated.");
     }
 
     private void HandleControlFileBindingStepsChanged(object? sender, NotifyCollectionChangedEventArgs e)

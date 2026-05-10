@@ -33,7 +33,7 @@ public partial class App : System.Windows.Application
         await RunStartupSequenceAsync(settings, "Preparing manual startup automation...");
     }
 
-    private async Task RunStartupSequenceAsync(AutomationLauncherSettings settings, string initialStatus)
+    private async Task RunStartupSequenceAsync(AutomationLauncherSettings settings, string initialStatus, ControlFileScriptBinding? controlBinding = null)
     {
         if (_host is null)
         {
@@ -72,8 +72,7 @@ public partial class App : System.Windows.Application
         StartStartupIndicator();
         UpdateTrayMenuState();
 
-        splashWindow.SetApplicationTitle("Automation Launcher");
-        splashWindow.SetBackgroundImage(settings.Startup.SplashBackgroundImagePath);
+        ApplyReactionSplashSettings(splashWindow, settings, controlBinding, HostControlCommandAction.Start, "Automation Launcher");
         splashWindow.ConfigureActions(showConfirmAction: true, confirmButtonText: "Start now", cancelButtonText: "Cancel startup");
         splashWindow.ConfigureConfirmDialog("Start startup automation immediately?");
         splashWindow.ConfigureCancelDialog(
@@ -94,7 +93,8 @@ public partial class App : System.Windows.Application
 
         try
         {
-            for (var remainingSeconds = 10; remainingSeconds > 0; remainingSeconds--)
+            var countdownSeconds = GetReactionCountdownSeconds(controlBinding, HostControlCommandAction.Start, 10);
+            for (var remainingSeconds = countdownSeconds; remainingSeconds > 0; remainingSeconds--)
             {
                 splashWindow.SetStatus($"Startup automation begins in {remainingSeconds}s. Click Start now to run immediately.");
                 var elapsedMilliseconds = 0;

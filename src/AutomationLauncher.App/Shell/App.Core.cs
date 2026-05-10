@@ -99,8 +99,10 @@ public partial class App : System.Windows.Application
 
         if (settingsStore.TryLoadCachedSettings(out var cachedSettings, out _))
         {
-            ApplyLoadedSettings(settings, cachedSettings!);
+            AutomationLauncherSettingsApplicator.ApplyLoadedSettings(settings, cachedSettings!);
         }
+
+        AutomationLauncherSettingsNormalizer.Normalize(settings);
 
         DeleteLegacyUserSettingsFile(settingsStore);
         Log.Logger = BuildLogger(settings);
@@ -118,6 +120,7 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<IStartupSequenceRunner, StartupSequenceRunner>();
                 services.AddInfrastructure(settings.Archive, Log.Logger);
                 services.AddSingleton<PowerShellScriptRunner>();
+                services.AddSingleton<IProjectScriptWorkflowService, ProjectScriptWorkflowService>();
                 services.AddSingleton<IControlFileScriptOrchestrator, ControlFileScriptOrchestrator>();
                 services.AddSingleton<IHostControlGuard, HostControlGuard>();
                 services.AddSingleton<MainWindowViewModel>();
@@ -228,17 +231,6 @@ public partial class App : System.Windows.Application
             "AutomationLauncher",
             "protected-settings.json");
     }
-
-    private static void ApplyLoadedSettings(AutomationLauncherSettings target, AutomationLauncherSettings source)
-    {
-        target.Archive = source.Archive ?? new ArchiveOptions();
-        target.Project = source.Project ?? new ProjectSettings();
-        target.ControlFiles = source.ControlFiles ?? new ControlFilesSettings();
-        target.Startup = source.Startup ?? new StartupSettings();
-        target.Logging = source.Logging ?? new LoggingSettings();
-        target.Ui = source.Ui ?? new UiSettings();
-    }
-
     private static void DeleteLegacyUserSettingsFile(IProtectedApplicationSettingsStore settingsStore)
     {
         var legacyPath = GetLegacyUserSettingsFilePath();

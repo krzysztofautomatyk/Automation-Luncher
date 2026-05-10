@@ -262,7 +262,7 @@ public sealed class ArchiveProjectUseCaseTests
 
     private static ArchiveProjectUseCase BuildUseCase(FakeGateway gateway)
     {
-        return new ArchiveProjectUseCase(gateway, new FakePathService(), new FakeOperationLogger());
+        return new ArchiveProjectUseCase(gateway, new FakePathService(), new FakeArchiveArtifactService(), new FakeOperationLogger());
     }
 
     private static ArchiveOptions DefaultOptions()
@@ -344,6 +344,87 @@ public sealed class ArchiveProjectUseCaseTests
 
         public void EnsureDirectoryExists(string path)
         {
+        }
+    }
+
+    private sealed class FakeArchiveArtifactService : IArchiveArtifactService
+    {
+        public long? TryGetPathSizeBytes(string path)
+        {
+            if (File.Exists(path))
+            {
+                return new FileInfo(path).Length;
+            }
+
+            if (!Directory.Exists(path))
+            {
+                return null;
+            }
+
+            return Directory
+                .EnumerateFiles(path, "*", SearchOption.AllDirectories)
+                .Sum(filePath => new FileInfo(filePath).Length);
+        }
+
+        public void PrepareStableBackupTarget(string archivePath, string oldArchivePath)
+        {
+            if (File.Exists(oldArchivePath))
+            {
+                File.Delete(oldArchivePath);
+            }
+
+            if (File.Exists(archivePath))
+            {
+                File.Move(archivePath, oldArchivePath);
+            }
+        }
+
+        public void FinalizeSuccessfulBackup(ArchiveOptions options, string archivePath, string? oldArchivePath, string archiveIdentity)
+        {
+            if (options.BackupFlow == ArchiveBackupFlow.StableFileWithOld)
+            {
+                if (!string.IsNullOrWhiteSpace(oldArchivePath) && File.Exists(oldArchivePath))
+                {
+                    File.Delete(oldArchivePath);
+                }
+
+                return;
+            }
+
+            if (options.SuccessfulBackupRetentionCount <= 0)
+            {
+                return;
+            }
+
+            var directoryPath = Path.GetDirectoryName(archivePath);
+            if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
+            {
+                return;
+            }
+
+            var matchingFiles = Directory
+                .EnumerateFiles(directoryPath, archiveIdentity + "_*.zap*", SearchOption.TopDirectoryOnly)
+                .OrderByDescending(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var obsoleteFile in matchingFiles.Skip(options.SuccessfulBackupRetentionCount))
+            {
+                File.Delete(obsoleteFile);
+            }
+        }
+
+        public void WriteMetricsLog(ArchiveMetricsLogEntry entry)
+        {
+            var outputDirectory = Path.GetDirectoryName(entry.ArchivePath);
+            if (string.IsNullOrWhiteSpace(outputDirectory))
+            {
+                return;
+            }
+
+            Directory.CreateDirectory(outputDirectory);
+            var archiveBaseName = Path.GetFileNameWithoutExtension(entry.ArchivePath);
+            var metricsLogPath = Path.Combine(outputDirectory, $"{archiveBaseName}.archive.log");
+            File.WriteAllText(metricsLogPath, $"CorrelationId={entry.CorrelationId}");
         }
     }
 

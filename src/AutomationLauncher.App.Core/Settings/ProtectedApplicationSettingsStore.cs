@@ -2,8 +2,6 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Collections.ObjectModel;
-using AutomationLauncher.Domain.Models;
 
 namespace AutomationLauncher.App;
 
@@ -50,7 +48,7 @@ public sealed class ProtectedApplicationSettingsStore : IProtectedApplicationSet
                 return false;
             }
 
-            Normalize(settings);
+            AutomationLauncherSettingsNormalizer.Normalize(settings);
             return true;
         }
         catch (Exception ex)
@@ -136,7 +134,7 @@ public sealed class ProtectedApplicationSettingsStore : IProtectedApplicationSet
                 return false;
             }
 
-            Normalize(settings);
+            AutomationLauncherSettingsNormalizer.Normalize(settings);
             return true;
         }
         catch (CryptographicException)
@@ -153,7 +151,7 @@ public sealed class ProtectedApplicationSettingsStore : IProtectedApplicationSet
 
     public void Save(AutomationLauncherSettings settings, string password)
     {
-        Normalize(settings);
+        AutomationLauncherSettingsNormalizer.Normalize(settings);
 
         var directoryPath = Path.GetDirectoryName(SettingsFilePath);
         if (!string.IsNullOrWhiteSpace(directoryPath))
@@ -190,153 +188,6 @@ public sealed class ProtectedApplicationSettingsStore : IProtectedApplicationSet
             WriteIndented = true,
             PropertyNameCaseInsensitive = true
         };
-    }
-
-    private static void Normalize(AutomationLauncherSettings settings)
-    {
-        settings.Archive ??= new();
-        settings.Project ??= new();
-        settings.ControlFiles ??= new();
-        settings.Startup ??= new();
-        settings.Logging ??= new();
-        settings.Ui ??= new();
-
-        settings.Project.PowerShellScripts ??= new List<ProjectScriptEntry>();
-        settings.Project.PowerShellScripts = settings.Project.PowerShellScripts
-            .Where(entry => entry is not null)
-            .Select(entry => new ProjectScriptEntry
-            {
-                Id = string.IsNullOrWhiteSpace(entry.Id) ? Guid.NewGuid().ToString("N") : entry.Id,
-                Name = entry.Name?.Trim() ?? string.Empty,
-                ScriptBody = entry.ScriptBody ?? string.Empty,
-                TimeoutSeconds = entry.TimeoutSeconds < 1 ? 300 : entry.TimeoutSeconds,
-                Parameters = new ObservableCollection<ProjectScriptParameterEntry>(NormalizeScriptParameters(entry.Parameters))
-            })
-            .ToList();
-
-        var normalizedBindings = new Dictionary<string, ControlFileScriptBinding>(StringComparer.OrdinalIgnoreCase);
-        foreach (var binding in settings.ControlFiles.Bindings ?? Enumerable.Empty<ControlFileScriptBinding>())
-        {
-            if (binding is null)
-            {
-                continue;
-            }
-
-            var normalizedType = NormalizeControlFileType(binding.ControlFileType);
-            if (normalizedType is null)
-            {
-                continue;
-            }
-
-            normalizedBindings[normalizedType] = new ControlFileScriptBinding
-            {
-                ControlFileType = normalizedType,
-                PreExecutionSteps = new ObservableCollection<ControlFileScriptSequenceStep>(NormalizeSequenceSteps(binding.PreExecutionSteps)),
-                PostExecutionSteps = new ObservableCollection<ControlFileScriptSequenceStep>(NormalizeSequenceSteps(binding.PostExecutionSteps))
-            };
-        }
-
-        settings.ControlFiles.Bindings = ControlFileScriptBinding.KnownControlFileTypes
-            .Select(type => normalizedBindings.TryGetValue(type, out var binding)
-                ? binding
-                : new ControlFileScriptBinding { ControlFileType = type })
-            .ToList();
-
-        settings.Startup.SplashBackgroundImagePath = string.IsNullOrWhiteSpace(settings.Startup.SplashBackgroundImagePath)
-            ? string.Empty
-            : settings.Startup.SplashBackgroundImagePath.Trim();
-
-        settings.Startup.SequenceEntries ??= new List<StartupSequenceEntry>();
-        settings.Startup.SequenceEntries = settings.Startup.SequenceEntries
-            .Where(entry => entry is not null)
-            .Select(entry => new StartupSequenceEntry
-            {
-                Alias = entry.Alias?.Trim() ?? string.Empty,
-                ExecutablePath = entry.ExecutablePath?.Trim() ?? string.Empty,
-                DelaySeconds = Math.Max(0, entry.DelaySeconds)
-            })
-            .ToList();
-
-        if (settings.Logging.RetainedFileCountLimit < 1)
-        {
-            settings.Logging.RetainedFileCountLimit = 30;
-        }
-
-        settings.Logging.DirectoryPath = string.IsNullOrWhiteSpace(settings.Logging.DirectoryPath)
-            ? "logs"
-            : settings.Logging.DirectoryPath.Trim();
-
-        settings.Logging.MinimumLevel = string.IsNullOrWhiteSpace(settings.Logging.MinimumLevel)
-            ? "Information"
-            : settings.Logging.MinimumLevel.Trim();
-
-        settings.Ui.ControlFilesDirectory = string.IsNullOrWhiteSpace(settings.Ui.ControlFilesDirectory)
-            ? string.Empty
-            : settings.Ui.ControlFilesDirectory.Trim();
-
-        if (!Enum.IsDefined(typeof(ArchiveBackupFlow), settings.Archive.BackupFlow))
-        {
-            settings.Archive.BackupFlow = ArchiveBackupFlow.TimestampedRetention;
-        }
-
-        if (settings.Archive.SuccessfulBackupRetentionCount < 0)
-        {
-            settings.Archive.SuccessfulBackupRetentionCount = 0;
-        }
-    }
-
-    private static IEnumerable<ControlFileScriptSequenceStep> NormalizeSequenceSteps(IEnumerable<ControlFileScriptSequenceStep>? steps)
-    {
-        return (steps ?? Enumerable.Empty<ControlFileScriptSequenceStep>())
-            .Where(step => step is not null)
-            .Select(step => new ControlFileScriptSequenceStep
-            {
-                ScriptId = step.ScriptId?.Trim() ?? string.Empty,
-                OnSuccess = Enum.IsDefined(typeof(ControlFileScriptOutcomeAction), step.OnSuccess)
-                    ? step.OnSuccess
-                    : ControlFileScriptOutcomeAction.RunNextScript,
-                OnFailure = Enum.IsDefined(typeof(ControlFileScriptOutcomeAction), step.OnFailure)
-                    ? step.OnFailure
-                    : ControlFileScriptOutcomeAction.AbortControlFlow,
-                ParameterOverrides = new ObservableCollection<ControlFileScriptParameterOverrideEntry>(NormalizeParameterOverrides(step.ParameterOverrides))
-            });
-    }
-
-    private static IEnumerable<ControlFileScriptParameterOverrideEntry> NormalizeParameterOverrides(IEnumerable<ControlFileScriptParameterOverrideEntry>? overrides)
-    {
-        return (overrides ?? Enumerable.Empty<ControlFileScriptParameterOverrideEntry>())
-            .Where(overrideEntry => overrideEntry is not null)
-            .Select(overrideEntry => new ControlFileScriptParameterOverrideEntry
-            {
-                Name = overrideEntry.Name?.Trim() ?? string.Empty,
-                Value = overrideEntry.Value ?? string.Empty
-            })
-            .Where(overrideEntry => !string.IsNullOrWhiteSpace(overrideEntry.Name));
-    }
-
-    private static IEnumerable<ProjectScriptParameterEntry> NormalizeScriptParameters(IEnumerable<ProjectScriptParameterEntry>? parameters)
-    {
-        return (parameters ?? Enumerable.Empty<ProjectScriptParameterEntry>())
-            .Where(parameter => parameter is not null)
-            .Select(parameter => new ProjectScriptParameterEntry
-            {
-                Name = parameter.Name?.Trim() ?? string.Empty,
-                DefaultValue = parameter.DefaultValue ?? string.Empty
-            })
-            .Where(parameter => !string.IsNullOrWhiteSpace(parameter.Name));
-    }
-
-    private static string? NormalizeControlFileType(string? controlFileType)
-    {
-        if (string.IsNullOrWhiteSpace(controlFileType))
-        {
-            return null;
-        }
-
-        var normalized = controlFileType!.Trim().ToLowerInvariant();
-        return ControlFileScriptBinding.KnownControlFileTypes.Contains(normalized, StringComparer.OrdinalIgnoreCase)
-            ? normalized
-            : null;
     }
 
     private static bool VerifyPassword(string password, string saltBase64, string expectedHashBase64)

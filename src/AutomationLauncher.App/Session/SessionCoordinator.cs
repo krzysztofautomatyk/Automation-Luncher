@@ -82,7 +82,7 @@ public sealed class SessionCoordinator : ISessionCoordinator
                 continue;
             }
 
-            ApplyLoadedSettings(_settings, loadedSettings!);
+            AutomationLauncherSettingsApplicator.ApplyLoadedSettings(_settings, loadedSettings!);
             _sessionState.Unlock(promptWindow.Password!);
             RegisterActivity();
             SessionStateChanged?.Invoke(this, new SessionStateChangedEventArgs(true, "Settings unlocked.", false));
@@ -126,15 +126,5 @@ public sealed class SessionCoordinator : ISessionCoordinator
 
         _sessionState.Lock();
         SessionStateChanged?.Invoke(this, new SessionStateChangedEventArgs(false, reason, isAutomatic));
-    }
-
-    private static void ApplyLoadedSettings(AutomationLauncherSettings target, AutomationLauncherSettings source)
-    {
-        target.Archive = source.Archive ?? new ArchiveOptions();
-        target.Project = source.Project ?? new ProjectSettings();
-        target.ControlFiles = source.ControlFiles ?? new ControlFilesSettings();
-        target.Startup = source.Startup ?? new StartupSettings();
-        target.Logging = source.Logging ?? new LoggingSettings();
-        target.Ui = source.Ui ?? new UiSettings();
     }
 }

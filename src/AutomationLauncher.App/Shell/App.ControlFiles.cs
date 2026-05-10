@@ -16,10 +16,24 @@ public partial class App : System.Windows.Application
 
     private string GetControlFilesRootDirectory()
     {
+        var fallbackDirectory = AppContext.BaseDirectory ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(fallbackDirectory))
+        {
+            fallbackDirectory = Environment.CurrentDirectory ?? ".";
+        }
+
+        if (string.IsNullOrWhiteSpace(fallbackDirectory))
+        {
+            fallbackDirectory = ".";
+        }
+
         var configuredDirectory = _host?.Services.GetService<AutomationLauncherSettings>()?.Ui?.ControlFilesDirectory;
-        var directory = string.IsNullOrWhiteSpace(configuredDirectory)
-            ? AppContext.BaseDirectory
-            : configuredDirectory.Trim();
+        var directory = fallbackDirectory;
+        var trimmedConfiguredDirectory = configuredDirectory?.Trim();
+        if (!string.IsNullOrWhiteSpace(trimmedConfiguredDirectory))
+        {
+            directory = trimmedConfiguredDirectory!;
+        }
 
         try
         {
@@ -28,7 +42,7 @@ public partial class App : System.Windows.Application
         }
         catch
         {
-            return AppContext.BaseDirectory;
+            return fallbackDirectory;
         }
     }
 
@@ -65,9 +79,10 @@ public partial class App : System.Windows.Application
 
     private void DeleteControlCommandFiles()
     {
-        DeleteControlFile(GetControlFilePath("start"));
-        DeleteControlFile(GetControlFilePath("stop"));
-        DeleteControlFile(GetControlFilePath("march"));
+        foreach (var binding in GetConfiguredControlCommandBindings())
+        {
+            DeleteControlFile(GetControlFilePath(binding.ControlFileType));
+        }
     }
 
     private async Task EnsureRunControlFileExistsAsync()
@@ -180,13 +195,46 @@ public partial class App : System.Windows.Application
 
     private IEnumerable<string> GetManagedControlFilePaths()
     {
-        yield return GetControlFilePath("run");
-        yield return GetControlFilePath("ready");
-        yield return GetControlFilePath("error");
-        yield return GetControlFilePath("start");
-        yield return GetControlFilePath("stop");
-        yield return GetControlFilePath("march");
-        yield return GetControlFilePath("archok");
+        var emittedControlTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var controlFileType in GetFixedControlFileTypes())
+        {
+            if (emittedControlTypes.Add(controlFileType))
+            {
+                yield return GetControlFilePath(controlFileType);
+            }
+        }
+
+        foreach (var binding in GetConfiguredControlCommandBindings())
+        {
+            if (emittedControlTypes.Add(binding.ControlFileType))
+            {
+                yield return GetControlFilePath(binding.ControlFileType);
+            }
+        }
+    }
+
+    private IEnumerable<ControlFileScriptBinding> GetConfiguredControlCommandBindings(AutomationLauncherSettings? settings = null)
+    {
+        settings ??= _host?.Services.GetService<AutomationLauncherSettings>();
+        foreach (var binding in settings?.ControlFiles?.Bindings ?? Enumerable.Empty<ControlFileScriptBinding>())
+        {
+            if (binding is null
+                || !ControlFileScriptBinding.TryNormalizeControlFileType(binding.ControlFileType, out var normalizedType)
+                || ControlFileScriptBinding.IsReservedMarkerType(normalizedType))
+            {
+                continue;
+            }
+
+            yield return binding;
+        }
+    }
+
+    private static IEnumerable<string> GetFixedControlFileTypes()
+    {
+        yield return "run";
+        yield return "ready";
+        yield return "error";
+        yield return "archok";
     }
 
     private async Task WriteControlFileWithAutomationAsync(string controlFileType, AutomationLauncherSettings? settings = null)

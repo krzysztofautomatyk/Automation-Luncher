@@ -3,7 +3,7 @@ using AutomationLauncher.Domain.Models;
 namespace AutomationLauncher.Domain.Contracts;
 
 /// <summary>
-/// Evaluates whether a host-control command (start / stop / march) is allowed
+/// Evaluates whether a host-control command (start / stop / archive) is allowed
 /// to execute given the current runtime state. Business rules only — no side effects.
 /// </summary>
 public interface IHostControlGuard
@@ -29,8 +29,8 @@ public interface IHostControlGuard
         bool isSequenceRunning);
 
     /// <summary>
-    /// Checks whether a MARCH command can trigger the archive workflow.
+    /// Checks whether an archive command can trigger the archive workflow.
     /// </summary>
     /// <param name="isArchiveBusy">True if an archive or other operation is already running.</param>
-    HostControlCommandReadiness CheckMarch(bool isArchiveBusy);
+    HostControlCommandReadiness CheckArchive(bool isArchiveBusy);
 }

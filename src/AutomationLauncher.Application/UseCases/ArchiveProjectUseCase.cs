@@ -1,8 +1,5 @@
 using AutomationLauncher.Domain.Contracts;
 using AutomationLauncher.Domain.Models;
-using System.Globalization;
-using System.Text;
-using System.Linq;
 
 namespace AutomationLauncher.Application.UseCases;
 
@@ -10,15 +7,18 @@ public sealed class ArchiveProjectUseCase
 {
     private readonly ITiaPortalGateway _tiaPortalGateway;
     private readonly IPathService _pathService;
+    private readonly IArchiveArtifactService _archiveArtifactService;
     private readonly IOperationLogger _logger;
 
     public ArchiveProjectUseCase(
         ITiaPortalGateway tiaPortalGateway,
         IPathService pathService,
+        IArchiveArtifactService archiveArtifactService,
         IOperationLogger logger)
     {
         _tiaPortalGateway = tiaPortalGateway;
         _pathService = pathService;
+        _archiveArtifactService = archiveArtifactService;
         _logger = logger;
     }
 
@@ -144,7 +144,7 @@ public sealed class ArchiveProjectUseCase
             // Re-read context after going offline to get fresh unsaved state
             var refreshedContext = await _tiaPortalGateway.GetCurrentContextAsync(cancellationToken);
 
-            var projectSizeBytes = TryGetPathSizeBytes(actualProject);
+            var projectSizeBytes = _archiveArtifactService.TryGetPathSizeBytes(actualProject);
 
             var shouldSave = DetermineShouldSave(refreshedContext, options, out var saveReason);
             _logger.SaveAttempted(correlationId, shouldSave, saveReason);
@@ -170,7 +170,7 @@ public sealed class ArchiveProjectUseCase
 
             if (options.BackupFlow == ArchiveBackupFlow.StableFileWithOld && oldArchivePath is not null)
             {
-                PrepareStableBackupTarget(archivePath, oldArchivePath);
+                _archiveArtifactService.PrepareStableBackupTarget(archivePath, oldArchivePath);
             }
 
             var attempt = 0;
@@ -189,20 +189,20 @@ public sealed class ArchiveProjectUseCase
                 {
                     var finishedAtLocal = DateTimeOffset.Now;
                     var duration = DateTimeOffset.UtcNow - startedAt;
-                    FinalizeSuccessfulBackup(options, archivePath, oldArchivePath, archiveIdentity);
+                    _archiveArtifactService.FinalizeSuccessfulBackup(options, archivePath, oldArchivePath, archiveIdentity);
                     _logger.ArchiveCompleted(correlationId, true, archivePath, duration);
-                    TryWriteArchiveMetricsLog(
+                    _archiveArtifactService.WriteMetricsLog(new ArchiveMetricsLogEntry(
                         archivePath,
                         correlationId,
                         startedAtLocal,
                         finishedAtLocal,
                         actualProject,
                         projectSizeBytes,
-                        TryGetPathSizeBytes(archivePath),
+                        _archiveArtifactService.TryGetPathSizeBytes(archivePath),
                         duration,
                         options.PreSaveAttempted,
                         options.PreSaveSucceeded,
-                        options.PreSaveTriggerSource);
+                        options.PreSaveTriggerSource));
                     return new ArchiveResult(ArchiveOutcome.Success, "Archive completed successfully.", archivePath, duration, context);
                 }
 
@@ -262,115 +262,6 @@ public sealed class ArchiveProjectUseCase
             && string.Equals(expectedNoExt, actualNoExt, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static long? TryGetPathSizeBytes(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                return new FileInfo(path).Length;
-            }
-
-            if (!Directory.Exists(path))
-            {
-                return null;
-            }
-
-            return Directory
-                .EnumerateFiles(path, "*", SearchOption.AllDirectories)
-                .Sum(filePath =>
-                {
-                    try
-                    {
-                        return new FileInfo(filePath).Length;
-                    }
-                    catch
-                    {
-                        return 0L;
-                    }
-                });
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static void TryWriteArchiveMetricsLog(
-        string archivePath,
-        string correlationId,
-        DateTimeOffset startedAt,
-        DateTimeOffset finishedAt,
-        string projectPath,
-        long? projectSizeBytes,
-        long? archiveSizeBytes,
-        TimeSpan duration,
-        bool preSaveAttempted = false,
-        bool? preSaveSucceeded = null,
-        string? preSaveTriggerSource = null)
-    {
-        try
-        {
-            var outputDirectory = Path.GetDirectoryName(archivePath);
-            if (string.IsNullOrWhiteSpace(outputDirectory))
-            {
-                return;
-            }
-
-            Directory.CreateDirectory(outputDirectory);
-            var archiveBaseName = Path.GetFileNameWithoutExtension(archivePath);
-            var metricsLogPath = Path.Combine(outputDirectory, $"{archiveBaseName}.archive.log");
-            var sb = new StringBuilder()
-                .AppendLine("Archive Metrics")
-                .AppendLine($"CorrelationId={correlationId}")
-                .AppendLine($"StartedAt={startedAt:O}")
-                .AppendLine($"ProjectPath={projectPath}")
-                .AppendLine($"ProjectSizeBytes={FormatBytesValue(projectSizeBytes)}")
-                .AppendLine($"ProjectSizeMB={FormatMegabytesValue(projectSizeBytes)}");
-
-            if (preSaveAttempted)
-            {
-                sb.AppendLine($"PreSaveAttempted=true")
-                  .AppendLine($"PreSaveTriggerSource={preSaveTriggerSource ?? "Unknown"}")
-                  .AppendLine($"PreSaveSucceeded={preSaveSucceeded?.ToString() ?? "N/A"}");
-            }
-            else
-            {
-                sb.AppendLine("PreSaveAttempted=false");
-            }
-
-            sb.AppendLine($"FinishedAt={finishedAt:O}")
-              .AppendLine($"ArchivePath={archivePath}")
-              .AppendLine($"ArchiveSizeBytes={FormatBytesValue(archiveSizeBytes)}")
-              .AppendLine($"ArchiveSizeMB={FormatMegabytesValue(archiveSizeBytes)}")
-              .AppendLine($"DurationMs={duration.TotalMilliseconds.ToString("F0", CultureInfo.InvariantCulture)}");
-
-            File.WriteAllText(metricsLogPath, sb.ToString());
-        }
-        catch
-        {
-            // Metrics log generation must not fail the archive workflow.
-        }
-    }
-
-    private static string FormatBytesValue(long? bytes)
-    {
-        return bytes.HasValue
-            ? bytes.Value.ToString(CultureInfo.InvariantCulture)
-            : "N/A";
-    }
-
-    private static string FormatMegabytesValue(long? bytes)
-    {
-        if (!bytes.HasValue)
-        {
-            return "N/A";
-        }
-
-        var megabytes = bytes.Value / (1024d * 1024d);
-        return megabytes.ToString("F2", CultureInfo.InvariantCulture);
-    }
-
     private static string BuildArchiveIdentity()
     {
         return Environment.MachineName + "_automaticBackup";
@@ -383,69 +274,4 @@ public sealed class ArchiveProjectUseCase
             : _pathService.BuildArchiveFilePath(projectPath, options.ArchiveOutputDirectory, $"{archiveIdentity}_{timestamp:yyyyMMdd_HHmmss}");
     }
 
-    private static void PrepareStableBackupTarget(string archivePath, string oldArchivePath)
-    {
-        if (File.Exists(oldArchivePath))
-        {
-            File.Delete(oldArchivePath);
-        }
-
-        if (File.Exists(archivePath))
-        {
-            File.Move(archivePath, oldArchivePath);
-        }
-    }
-
-    private void FinalizeSuccessfulBackup(ArchiveOptions options, string archivePath, string? oldArchivePath, string archiveIdentity)
-    {
-        if (options.BackupFlow == ArchiveBackupFlow.StableFileWithOld)
-        {
-            if (!string.IsNullOrWhiteSpace(oldArchivePath) && File.Exists(oldArchivePath))
-            {
-                try
-                {
-                    File.Delete(oldArchivePath);
-                }
-                catch
-                {
-                    // Old backup cleanup should not fail a successful archive.
-                }
-            }
-
-            return;
-        }
-
-        CleanupOldSuccessfulBackups(archivePath, archiveIdentity, options.SuccessfulBackupRetentionCount);
-    }
-
-    private static void CleanupOldSuccessfulBackups(string currentArchivePath, string archiveIdentity, int retentionCount)
-    {
-        if (retentionCount <= 0)
-        {
-            return;
-        }
-
-        var directoryPath = Path.GetDirectoryName(currentArchivePath);
-        if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
-        {
-            return;
-        }
-
-        var matchingFiles = Directory
-            .EnumerateFiles(directoryPath, archiveIdentity + "_*.zap*", SearchOption.TopDirectoryOnly)
-            .OrderByDescending(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        foreach (var obsoleteFile in matchingFiles.Skip(retentionCount))
-        {
-            try
-            {
-                File.Delete(obsoleteFile);
-            }
-            catch
-            {
-                // Retention cleanup should not fail a successful archive.
-            }
-        }
-    }
 }

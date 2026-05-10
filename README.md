@@ -16,7 +16,12 @@ Production-ready desktop application for Siemens TIA Portal project archiving wo
 
 ## Configuration
 
-Default values are defined in src/AutomationLauncher.App/appsettings.json. After the first launch the application stores protected settings in LocalApplicationData/AutomationLauncher/protected-settings.json.
+Default values are defined in `src/AutomationLauncher.App/appsettings.json`. After the first launch the application stores:
+
+- cached settings in `LocalApplicationData/AutomationLauncher/settings-cache.json`
+- protected settings in `LocalApplicationData/AutomationLauncher/protected-settings.json`
+
+If legacy `user-settings.json` exists, the app retires it after protected/cache settings become available.
 
 Key settings:
 
@@ -42,11 +47,25 @@ Logs are written to:
 
 - configured log directory, by default logs/automation-launcher-.log
 
+## Repository Layout
+
+| Path | Purpose |
+|---|---|
+| `src/AutomationLauncher.Domain` | Contracts and pure models |
+| `src/AutomationLauncher.Application` | Use cases and application services |
+| `src/AutomationLauncher.Infrastructure` | TIA, file system, and logging adapters |
+| `src/AutomationLauncher.App.Core` | Non-WPF App-layer services, settings storage, and script orchestration |
+| `src/AutomationLauncher.App` | WPF shell, tray integration, views, and view models |
+| `tests/` | Layered test projects |
+| `docs/` | Architecture and operational documentation |
+
 ## Build and Test
 
-1. dotnet restore
-2. dotnet build -c Release
-3. dotnet test
+Use the SDK pinned in `global.json`.
+
+1. `dotnet restore "Automation Luncher.sln"`
+2. `dotnet build "Automation Luncher.sln" -c Release`
+3. `dotnet test "Automation Luncher.sln" -c Release`
 
 ## Notes
 
