@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TIA Portal — MARCH Workflow Simulation</title>
+  <style>
+    :root {
+      --bg:           #090c14;
+      --bg2:          #0f1420;
+      --bg3:          #141928;
+      --border:       #1c2540;
+      --txt:          #dde2ef;
+      --txt2:         #7a87a0;
+      --txt3:         #3a4560;
+      --blue:         #009ecf;
+      --cyan:         #00c8e8;
+      --green:        #22c55e;
+      --yellow:       #f59e0b;
+      --red:          #ef4444;
+      --orange:       #f97316;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      background: var(--bg);
+      color: var(--txt);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── HEADER ─────────────────────────────────────────── */
+    header {
+      flex-shrink: 0;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .hdr-icon { font-size: 22px; line-height: 1; }
+    .hdr-title { font-size: 15px; font-weight: 700; letter-spacing: .2px; }
+    .hdr-sub   { font-size: 11px; color: var(--txt2); margin-top: 1px; }
+    .hdr-badge {
+      margin-left: auto;
+      font-size: 10px; font-weight: 700; letter-spacing: .6px;
+      background: rgba(0,158,207,.12);
+      border: 1px solid var(--blue);
+      color: var(--blue);
+      padding: 3px 10px; border-radius: 20px;
+    }
+
+    /* ─── TOOLBAR ────────────────────────────────────────── */
+    .toolbar {
+      flex-shrink: 0;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .tb-label {
+      font-size: 10px; font-weight: 700; letter-spacing: .5px;
+      color: var(--txt3); text-transform: uppercase;
+    }
+    .tb-sep { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
+    .tb-space { flex: 1; }
+
+    /* scenario buttons */
+    .sc-btn {
+      display: flex; align-items: center; gap: 5px;
+      padding: 5px 12px; border-radius: 5px;
+      font-size: 11.5px; font-weight: 500;
+      cursor: pointer; border: 1px solid; transition: all .15s;
+    }
+    .sc-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .sc-btn.ok  { background: rgba(34,197,94,.07);  border-color: rgba(34,197,94,.35);  color: var(--green);  }
+    .sc-btn.ok:not(:disabled):hover  { background: rgba(34,197,94,.18);  border-color: var(--green);  }
+    .sc-btn.wrn { background: rgba(249,115,22,.07); border-color: rgba(249,115,22,.35); color: var(--orange); }
+    .sc-btn.wrn:not(:disabled):hover { background: rgba(249,115,22,.18); border-color: var(--orange); }
+    .sc-btn.err { background: rgba(239,68,68,.07);  border-color: rgba(239,68,68,.35);  color: var(--red);    }
+    .sc-btn.err:not(:disabled):hover { background: rgba(239,68,68,.18);  border-color: var(--red);    }
+    .sc-btn.sel { outline: 2px solid currentColor; outline-offset: 2px; }
+
+    /* control buttons */
+    .ctl-btn {
+      padding: 5px 12px; border-radius: 5px;
+      border: 1px solid var(--border);
+      background: transparent; color: var(--txt2);
+      font-size: 11.5px; cursor: pointer; transition: all .15s;
+    }
+    .ctl-btn:not(:disabled):hover { border-color: var(--blue); color: var(--blue); background: rgba(0,158,207,.07); }
+    .ctl-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    .speed-wrap { display: flex; align-items: center; gap: 6px; }
+    .speed-wrap label { font-size: 10px; color: var(--txt3); }
+    .speed-wrap select {
+      background: var(--bg3); border: 1px solid var(--border);
+      color: var(--txt2); padding: 4px 8px; border-radius: 4px;
+      font-size: 11px; cursor: pointer;
+    }
+
+    /* ─── MAIN LAYOUT ────────────────────────────────────── */
+    .main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* ─── DIAGRAM PANEL ──────────────────────────────────── */
+    .diagram-panel {
+      flex-shrink: 0;
+      width: 820px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      border-right: 1px solid var(--border);
+      background: var(--bg);
+      padding: 16px 8px 32px;
+    }
+    .diagram-panel svg { display: block; margin: 0 auto; }
+
+    /* SVG node shapes */
+    .n-bg-start   { fill:#0d1e3a; stroke:#009ecf; stroke-width:1.5; }
+    .n-bg-proc    { fill:#121c38; stroke:#1e3060; stroke-width:1.5; }
+    .n-bg-dec     { fill:#101e30; stroke:#1a3858; stroke-width:1.5; }
+    .n-bg-ok      { fill:#0a2018; stroke:#22c55e; stroke-width:1.5; }
+    .n-bg-err     { fill:#280d0d; stroke:#ef4444; stroke-width:1.5; }
+    .n-bg-launch  { fill:#1a1a0a; stroke:#f97316; stroke-width:1; stroke-dasharray:5 3; }
+
+    .n-lbl { font-family:'Segoe UI',system-ui,sans-serif; text-anchor:middle; dominant-baseline:middle; pointer-events:none; }
+
+    /* edges */
+    .e-base { fill:none; stroke:#1e3060; stroke-width:1.5; }
+    .e-ok   { fill:none; stroke:rgba(34,197,94,.35);  stroke-width:1.5; }
+    .e-err  { fill:none; stroke:rgba(239,68,68,.35);  stroke-width:1.5; }
+    .e-wrn  { fill:none; stroke:rgba(249,115,22,.35); stroke-width:1.5; }
+    .e-rail { fill:none; stroke:rgba(239,68,68,.18); stroke-width:1.5; stroke-dasharray:4 3; }
+
+    /* ── active / visited node overrides ── */
+    .nst-proc .n-bg-proc,
+    .nst-proc .n-bg-start,
+    .nst-proc .n-bg-launch { fill:#182848!important; stroke:var(--blue)!important; stroke-width:2!important;
+      filter:drop-shadow(0 0 8px rgba(0,158,207,.55)); }
+    .nst-dec .n-bg-dec  { fill:#102238!important; stroke:var(--cyan)!important; stroke-width:2!important;
+      filter:drop-shadow(0 0 10px rgba(0,200,232,.5)); }
+    .nst-done  .n-bg-proc, .nst-done  .n-bg-dec, .nst-done  .n-bg-start,
+    .nst-done  .n-bg-launch
+                        { fill:#0a2018!important; stroke:var(--green)!important; stroke-width:1.5!important; }
+    .nst-fail  .n-bg-err, .nst-fail  .n-bg-proc, .nst-fail .n-bg-dec
+                        { fill:#280d0d!important; stroke:var(--red)!important; stroke-width:1.5!important; }
+    .nst-final-ok  .n-bg-ok  { fill:#08200f!important; stroke:var(--green)!important; stroke-width:2.5!important;
+      filter:drop-shadow(0 0 12px rgba(34,197,94,.6)); }
+    .nst-final-err .n-bg-err { fill:#260808!important; stroke:var(--red)!important; stroke-width:2.5!important;
+      filter:drop-shadow(0 0 12px rgba(239,68,68,.6)); }
+
+    /* ── active edge override ── */
+    .ea-base { stroke:var(--cyan)  !important; stroke-width:2!important; }
+    .ea-ok   { stroke:var(--green) !important; stroke-width:2!important; }
+    .ea-err  { stroke:var(--red)   !important; stroke-width:2!important; }
+    .ea-wrn  { stroke:var(--orange)!important; stroke-width:2!important; }
+
+    /* ─── RIGHT PANEL ────────────────────────────────────── */
+    .right-panel {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column;
+      background: var(--bg2); overflow: hidden;
+    }
+
+    /* status bar */
+    .status-bar {
+      flex-shrink: 0;
+      padding: 8px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .step-ctr { font-size: 11px; color: var(--txt2); white-space: nowrap; }
+    .step-ctr b { color: var(--blue); }
+    .progress { flex:1; height:3px; background:var(--border); border-radius:2px; overflow:hidden; }
+    .progress-fill { height:100%; background:linear-gradient(90deg,var(--blue),var(--cyan)); border-radius:2px; transition:width .4s; width:0; }
+    .badge {
+      font-size: 10px; font-weight: 700; letter-spacing: .3px;
+      padding: 3px 10px; border-radius: 20px; display: none;
+    }
+    .badge.ok  { display:inline-block; background:rgba(34,197,94,.12);  border:1px solid var(--green);  color:var(--green);  }
+    .badge.err { display:inline-block; background:rgba(239,68,68,.12);  border:1px solid var(--red);    color:var(--red);    }
+    .badge.run { display:inline-block; background:rgba(0,158,207,.12);  border:1px solid var(--blue);   color:var(--blue);   }
+
+    /* log header */
+    .log-hdr {
+      flex-shrink: 0;
+      padding: 8px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .log-hdr h3 { font-size: 12px; font-weight: 600; color: var(--txt2); }
+    .log-cnt {
+      background: rgba(0,158,207,.12); color: var(--blue);
+      padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 700;
+    }
+    .log-acts { margin-left: auto; display: flex; gap: 5px; }
+    .log-btn {
+      padding: 3px 9px; border-radius: 4px;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--txt3); font-size: 10px; cursor: pointer; transition: all .15s;
+    }
+    .log-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+    /* log body */
+    .log-body {
+      flex: 1; overflow-y: auto; padding: 4px 0;
+      font-family: 'Cascadia Code','Fira Code','Consolas',monospace;
+      font-size: 11.5px; min-height: 0;
+    }
+    .le {
+      display: flex; gap: 8px; align-items: baseline;
+      padding: 2px 14px; border-left: 2px solid transparent;
+      animation: le-in .25s ease;
+    }
+    @keyframes le-in { from{opacity:0;transform:translateX(-5px)} to{opacity:1;transform:none} }
+    .le:hover { background: rgba(255,255,255,.025); }
+    .le.ok   { border-left-color: var(--green);  background: rgba(34,197,94,.03); }
+    .le.err  { border-left-color: var(--red);    background: rgba(239,68,68,.03); }
+    .le.wrn  { border-left-color: var(--yellow); background: rgba(245,158,11,.03); }
+    .le.step { border-left-color: var(--blue);   background: rgba(0,158,207,.05); }
+    .le-ts  { color:var(--txt3); font-size:10px; white-space:nowrap; flex-shrink:0; }
+    .le-lvl { width:42px; text-align:center; font-size:10px; font-weight:700; letter-spacing:.4px; flex-shrink:0; }
+    .le.info .le-lvl { color:var(--blue); }
+    .le.ok   .le-lvl { color:var(--green); }
+    .le.err  .le-lvl { color:var(--red); }
+    .le.wrn  .le-lvl { color:var(--yellow); }
+    .le.step .le-lvl { color:var(--cyan); }
+    .le-msg { color:var(--txt); line-height:1.5; word-break:break-word; }
+    .le.err  .le-msg { color:#fca5a5; }
+    .le.ok   .le-msg { color:#86efac; }
+    .le.wrn  .le-msg { color:#fde68a; }
+    .le-sep { border: none; border-top: 1px solid var(--border); margin: 3px 14px; }
+
+    /* current step footer */
+    .step-footer {
+      flex-shrink: 0;
+      padding: 7px 16px;
+      border-top: 1px solid var(--border);
+      background: rgba(0,158,207,.03);
+      font-size: 11px; color: var(--txt2);
+      display: flex; align-items: center; gap: 8px; min-height: 34px;
+    }
+    .pulse-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--blue); flex-shrink: 0;
+    }
+    .pulse-dot.live { animation: pdot 1.1s ease-in-out infinite; }
+    @keyframes pdot { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- ─── HEADER ──────────────────────────────────────────────── -->
+<header>
+  <span class="hdr-icon">🔷</span>
+  <div>
+    <div class="hdr-title">TIA Portal — MARCH Workflow Simulation</div>
+    <div class="hdr-sub">Automation Launcher · Archive command · All scenarios covered</div>
+  </div>
+  <div class="hdr-badge">HOST.march → Archive</div>
+</header>
+
+<!-- ─── TOOLBAR ─────────────────────────────────────────────── -->
+<div class="toolbar">
+  <span class="tb-label">Scenarios</span>
+  <button class="sc-btn ok"  id="btn0" onclick="runScenario(0)">✅ Full Success</button>
+  <button class="sc-btn wrn" id="btn1" onclick="runScenario(1)">🔄 TIA Not Running</button>
+  <button class="sc-btn err" id="btn2" onclick="runScenario(2)">❌ No Project Loaded</button>
+  <button class="sc-btn err" id="btn3" onclick="runScenario(3)">❌ Unsaved Changes</button>
+  <button class="sc-btn err" id="btn4" onclick="runScenario(4)">❌ PLC Mismatch</button>
+  <button class="sc-btn err" id="btn5" onclick="runScenario(5)">❌ Archive Failed</button>
+  <div class="tb-sep"></div>
+  <button class="ctl-btn" id="resetBtn" onclick="resetSim()">⟲ Reset</button>
+  <div class="tb-space"></div>
+  <div class="speed-wrap">
+    <label for="spd">Speed:</label>
+    <select id="spd">
+      <option value="1400">Slow</option>
+      <option value="750" selected>Normal</option>
+      <option value="340">Fast</option>
+      <option value="60">Instant</option>
+    </select>
+  </div>
+</div>
+
+<!-- ─── MAIN ─────────────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- SVG DIAGRAM -->
+  <div class="diagram-panel">
+    <svg id="svg" viewBox="0 0 820 1040" width="804" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- arrowheads -->
+        <marker id="ah"   markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#1e3060"/></marker>
+        <marker id="ahok" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="rgba(34,197,94,.4)"/></marker>
+        <marker id="aher" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="rgba(239,68,68,.4)"/></marker>
+        <marker id="ahwr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="rgba(249,115,22,.4)"/></marker>
+        <!-- active arrowheads -->
+        <marker id="aha"   markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#00c8e8"/></marker>
+        <marker id="ahao"  markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#22c55e"/></marker>
+        <marker id="ahae"  markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#ef4444"/></marker>
+        <marker id="ahaw"  markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#f97316"/></marker>
+      </defs>
+
+      <!-- ══════════════════════════════════
+           EDGES  (drawn below nodes)
+      ══════════════════════════════════ -->
+
+      <!-- start → init -->
+      <path id="e-s-init"     class="e-base" d="M410,64 L410,96"    marker-end="url(#ah)"/>
+      <!-- init → d1 -->
+      <path id="e-init-d1"    class="e-base" d="M410,144 L410,193"  marker-end="url(#ah)"/>
+
+      <!-- d1 YES → d2 -->
+      <path id="e-d1yes"      class="e-ok"   d="M410,275 L410,321"  marker-end="url(#ahok)"/>
+      <text x="428" y="301" class="n-lbl" font-size="9.5" fill="rgba(34,197,94,.7)">YES</text>
+
+      <!-- d1 NO → launch -->
+      <path id="e-d1no"       class="e-wrn"  d="M305,234 L242,234"  marker-end="url(#ahwr)"/>
+      <text x="275" y="225" class="n-lbl" font-size="9.5" fill="rgba(249,115,22,.8)">NO</text>
+
+      <!-- launch → d1 (retry loop) -->
+      <path id="e-launch-d1"  class="e-wrn"  d="M145,208 L145,168 L392,168 L392,193" marker-end="url(#ahwr)"/>
+      <text x="265" y="159" class="n-lbl" font-size="9" fill="rgba(249,115,22,.7)">RETRY</text>
+
+      <!-- d2 YES → d3 -->
+      <path id="e-d2yes"      class="e-ok"   d="M410,403 L410,449"  marker-end="url(#ahok)"/>
+      <text x="428" y="430" class="n-lbl" font-size="9.5" fill="rgba(34,197,94,.7)">YES</text>
+
+      <!-- d2 NO → err1 -->
+      <path id="e-d2no"       class="e-err"  d="M523,362 L592,362"  marker-end="url(#aher)"/>
+      <text x="556" y="353" class="n-lbl" font-size="9.5" fill="rgba(239,68,68,.8)">NO</text>
+
+      <!-- d3 CLEAN → d4 -->
+      <path id="e-d3yes"      class="e-ok"   d="M410,529 L410,575"  marker-end="url(#ahok)"/>
+      <text x="436" y="556" class="n-lbl" font-size="9" fill="rgba(34,197,94,.7)">CLEAN</text>
+
+      <!-- d3 DIRTY → err2 -->
+      <path id="e-d3no"       class="e-err"  d="M523,489 L592,489"  marker-end="url(#aher)"/>
+      <text x="555" y="480" class="n-lbl" font-size="9.5" fill="rgba(239,68,68,.8)">DIRTY</text>
+
+      <!-- d4 MATCH → archive -->
+      <path id="e-d4yes"      class="e-ok"   d="M410,655 L410,702"  marker-end="url(#ahok)"/>
+      <text x="435" y="682" class="n-lbl" font-size="9" fill="rgba(34,197,94,.7)">MATCH</text>
+
+      <!-- d4 MISMATCH → err3 -->
+      <path id="e-d4no"       class="e-err"  d="M523,616 L592,616"  marker-end="url(#aher)"/>
+      <text x="555" y="607" class="n-lbl" font-size="9.5" fill="rgba(239,68,68,.8)">NO</text>
+
+      <!-- archive SUCCESS → archok -->
+      <path id="e-arc-ok"     class="e-ok"   d="M368,757 L368,780 L244,780 L244,826" marker-end="url(#ahok)"/>
+      <text x="300" y="774" class="n-lbl" font-size="9" fill="rgba(34,197,94,.7)">SUCCESS</text>
+
+      <!-- archive FAILED → archerr -->
+      <path id="e-arc-err"    class="e-err"  d="M452,757 L452,780 L572,780 L572,826" marker-end="url(#aher)"/>
+      <text x="516" y="774" class="n-lbl" font-size="9" fill="rgba(239,68,68,.7)">FAILED</text>
+
+      <!-- ── Error rail (right side): all errors converge ── -->
+      <!-- vertical rail -->
+      <line id="rail-v"     x1="798" y1="349" x2="798" y2="965" class="e-rail"/>
+      <!-- err1 → rail -->
+      <path id="e-err1-r"  class="e-err" d="M778,362 L798,362"  marker-end="none"/>
+      <!-- err2 → rail -->
+      <path id="e-err2-r"  class="e-err" d="M778,489 L798,489"  marker-end="none"/>
+      <!-- err3 → rail -->
+      <path id="e-err3-r"  class="e-err" d="M778,616 L798,616"  marker-end="none"/>
+      <!-- archerr → rail -->
+      <path id="e-aerr-r"  class="e-err" d="M672,848 L798,848"  marker-end="none"/>
+      <!-- rail → hosterr -->
+      <path id="e-rail-he" class="e-err" d="M798,965 L812,965"  marker-end="url(#aher)"/>
+
+      <!-- ══════════════════════════════════
+           NODES
+      ══════════════════════════════════ -->
+
+      <!-- START ─────────────────────────── -->
+      <g id="nd-start">
+        <rect class="n-bg-start" x="286" y="27" width="248" height="37" rx="18"/>
+        <text class="n-lbl" x="410" y="43"   font-size="12"   font-weight="700" fill="#e8eaf0">HOST.march Detected</text>
+        <text class="n-lbl" x="410" y="57.5" font-size="9.5"  fill="#7a87a0">Archive command received · correlation ID assigned</text>
+      </g>
+
+      <!-- INIT ──────────────────────────── -->
+      <g id="nd-init">
+        <rect class="n-bg-proc" x="228" y="96" width="364" height="48" rx="4"/>
+        <text class="n-lbl" x="410" y="113"  font-size="11.5" font-weight="600" fill="#dde2ef">Delete HOST.march command file</text>
+        <text class="n-lbl" x="410" y="131"  font-size="10"   fill="#7a87a0">Clear all control files · preserve HOST.run heartbeat</text>
+      </g>
+
+      <!-- D1: TIA Portal Running? ─────── -->
+      <g id="nd-d1">
+        <polygon class="n-bg-dec" points="410,193 523,234 410,275 297,234"/>
+        <text class="n-lbl" x="410" y="228" font-size="11"   fill="#dde2ef">TIA Portal</text>
+        <text class="n-lbl" x="410" y="244" font-size="11"   fill="#dde2ef">Running?</text>
+      </g>
+
+      <!-- LAUNCH TIA ─────────────────── -->
+      <g id="nd-launch">
+        <rect class="n-bg-launch" x="52" y="208" width="185" height="52" rx="4"/>
+        <text class="n-lbl" x="145" y="227"  font-size="11"   fill="#dde2ef">Launch TIA Portal</text>
+        <text class="n-lbl" x="145" y="243"  font-size="9.5"  fill="#f97316">Waiting for process…</text>
+        <text class="n-lbl" x="145" y="255.5" font-size="9"  fill="#7a87a0">timeout: 120 s</text>
+      </g>
+
+      <!-- D2: Project Loaded? ─────────── -->
+      <g id="nd-d2">
+        <polygon class="n-bg-dec" points="410,321 523,362 410,403 297,362"/>
+        <text class="n-lbl" x="410" y="356" font-size="11"   fill="#dde2ef">Expected Project</text>
+        <text class="n-lbl" x="410" y="372" font-size="11"   fill="#dde2ef">Loaded?</text>
+      </g>
+
+      <!-- ERR1: No project ──────────── -->
+      <g id="nd-err1">
+        <rect class="n-bg-err" x="592" y="340" width="186" height="44" rx="4"/>
+        <text class="n-lbl" x="685" y="356"  font-size="11"  fill="#fca5a5" font-weight="600">✗ No Project Loaded</text>
+        <text class="n-lbl" x="685" y="372"  font-size="9.5" fill="#ef4444">TIA has no project open</text>
+      </g>
+
+      <!-- D3: Unsaved Changes? ────────── -->
+      <g id="nd-d3">
+        <polygon class="n-bg-dec" points="410,449 523,489 410,529 297,489"/>
+        <text class="n-lbl" x="410" y="483" font-size="11"  fill="#dde2ef">Any Unsaved</text>
+        <text class="n-lbl" x="410" y="499" font-size="11"  fill="#dde2ef">Changes?</text>
+      </g>
+
+      <!-- ERR2: Unsaved ────────────── -->
+      <g id="nd-err2">
+        <rect class="n-bg-err" x="592" y="467" width="186" height="44" rx="4"/>
+        <text class="n-lbl" x="685" y="483"  font-size="11"  fill="#fca5a5" font-weight="600">✗ Unsaved Changes</text>
+        <text class="n-lbl" x="685" y="499"  font-size="9.5" fill="#ef4444">Project.IsModified = true</text>
+      </g>
+
+      <!-- D4: PLC 1:1? ───────────────── -->
+      <g id="nd-d4">
+        <polygon class="n-bg-dec" points="410,575 523,616 410,655 297,616"/>
+        <text class="n-lbl" x="410" y="610" font-size="11"  fill="#dde2ef">Project 1:1 with</text>
+        <text class="n-lbl" x="410" y="626" font-size="11"  fill="#dde2ef">PLC Online?</text>
+      </g>
+
+      <!-- ERR3: PLC Mismatch ────────── -->
+      <g id="nd-err3">
+        <rect class="n-bg-err" x="592" y="594" width="186" height="44" rx="4"/>
+        <text class="n-lbl" x="685" y="610"  font-size="11"  fill="#fca5a5" font-weight="600">✗ PLC Mismatch</text>
+        <text class="n-lbl" x="685" y="626"  font-size="9.5" fill="#ef4444">Project ≠ PLC firmware</text>
+      </g>
+
+      <!-- ARCHIVE ─────────────────────── -->
+      <g id="nd-archive">
+        <rect class="n-bg-proc" x="244" y="702" width="332" height="55" rx="4"/>
+        <text class="n-lbl" x="410" y="722"  font-size="12"  font-weight="700" fill="#dde2ef">Execute Archive + CRC</text>
+        <text class="n-lbl" x="410" y="738"  font-size="9.5" fill="#7a87a0">Siemens.Engineering · ArchiveProject()</text>
+        <text class="n-lbl" x="410" y="752"  font-size="9.5" fill="#7a87a0">Polly retry ×3 · exponential back-off · CRC32 checksum</text>
+      </g>
+
+      <!-- ARCHOK ──────────────────────── -->
+      <g id="nd-archok">
+        <rect class="n-bg-ok" x="130" y="826" width="228" height="58" rx="4"/>
+        <text class="n-lbl" x="244" y="844"  font-size="11.5" font-weight="700" fill="#86efac">✓ Archive Complete</text>
+        <text class="n-lbl" x="244" y="860"  font-size="9.5"  fill="#22c55e">CRC verified · HOST.archok created</text>
+        <text class="n-lbl" x="244" y="876"  font-size="9"    fill="#4ade80">Tray indicator: 🔵 → ✅ done</text>
+      </g>
+
+      <!-- ARCHERR ─────────────────────── -->
+      <g id="nd-archerr">
+        <rect class="n-bg-err" x="472" y="826" width="200" height="44" rx="4"/>
+        <text class="n-lbl" x="572" y="842"  font-size="11"  fill="#fca5a5" font-weight="600">✗ Archive Failed</text>
+        <text class="n-lbl" x="572" y="858"  font-size="9.5" fill="#ef4444">EngineeringException (3 retries)</text>
+      </g>
+
+      <!-- HOSTERR (shared terminal) ──── -->
+      <g id="nd-hosterr">
+        <rect class="n-bg-err" x="596" y="943" width="228" height="48" rx="22"/>
+        <text class="n-lbl" x="710" y="962"  font-size="12"  font-weight="700" fill="#fca5a5">✗ HOST.error Created</text>
+        <text class="n-lbl" x="710" y="979"  font-size="9.5" fill="#ef4444">Tray: 🔴 blinking · manual recovery required</text>
+      </g>
+
+    </svg>
+  </div><!-- end diagram-panel -->
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+
+    <!-- status bar -->
+    <div class="status-bar">
+      <div class="step-ctr">Step <b id="sc-cur">0</b> / <b id="sc-tot">0</b></div>
+      <div class="progress"><div class="progress-fill" id="prog"></div></div>
+      <div class="badge" id="badge"></div>
+    </div>
+
+    <!-- log header -->
+    <div class="log-hdr">
+      <h3>📋 Operation Log</h3>
+      <span class="log-cnt" id="lcnt">0</span>
+      <div class="log-acts">
+        <button class="log-btn" onclick="copyLog()">⎘ Copy</button>
+        <button class="log-btn" onclick="clearLog()">✕ Clear</button>
+      </div>
+    </div>
+
+    <!-- log entries -->
+    <div class="log-body" id="log"></div>
+
+    <!-- step footer -->
+    <div class="step-footer">
+      <div class="pulse-dot" id="pdot"></div>
+      <span id="step-info">Idle — select a scenario above  ·  keyboard: 1–6 run · R reset</span>
+    </div>
+
+  </div>
+</div><!-- end main -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════════
+const spd   = () => +document.getElementById('spd').value;
+const $ = id => document.getElementById(id);
+
+function ts() {
+  const n = new Date();
+  return [n.getHours(), n.getMinutes(), n.getSeconds()]
+    .map(v => String(v).padStart(2,'0')).join(':') + '.' +
+    String(n.getMilliseconds()).padStart(3,'0');
+}
+function guid8()  { return [...Array(8)].map(()=>Math.floor(Math.random()*16).toString(16).toUpperCase()).join(''); }
+function fakeCrc(){ return Math.floor(Math.random()*0xFFFFFFFF).toString(16).toUpperCase().padStart(8,'0'); }
+function today()  { const d=new Date(); return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`; }
+
+// ═══════════════════════════════════════════════════════════════
+//  SCENARIOS
+//  Each step: { node, edge?, edgeKind?, log:[{k,m}], info, finalState? }
+//  edgeKind: 'ok'|'err'|'wrn'|'base'
+//  finalState: 'ok'|'err'
+// ═══════════════════════════════════════════════════════════════
+function S(node, edge, ek, info, logs, finalState) {
+  return { node, edge, ek: ek||'base', info, log: logs, finalState };
+}
+function L(k, m) { return {k, m}; }
+
+// shared preamble steps (reused across scenarios)
+function preamble(cid) {
+  return [
+    S('nd-start', null, null,
+      'MARCH command received',
+      [L('step','══  HOST.march command received  ══'),
+       L('info',`Control file: HOST.march`),
+       L('info',`Correlation ID: ${cid}`)]),
+    S('nd-init', 'e-s-init', 'base',
+      'Deleting command file & clearing control files',
+      [L('info','Deleting HOST.march...'),
+       L('info','Clearing HOST.ready, HOST.archok, HOST.error (if present)'),
+       L('info','HOST.run preserved — launcher heartbeat active')]),
+  ];
+}
+
+const SCENARIOS = [
+
+  // ─ 0: Full Success ──────────────────────────────────────────
+  { name: 'Full Success', steps: [
+    ...preamble(guid8()),
+    S('nd-d1','e-init-d1','base','[Step 1] Checking TIA Portal process…',
+      [L('info','Querying OS for Siemens.TIA.Portal.exe...')]),
+    S('nd-d2','e-d1yes','ok','TIA running ✓ · [Step 2] Checking project…',
+      [L('ok','TIA Portal is running (PID: 8472, v18.0)'),
+       L('info','Connecting to TIA Openness API…'),
+       L('info','Reading active project context…')]),
+    S('nd-d3','e-d2yes','ok','Project loaded ✓ · [Step 3] Checking save state…',
+      [L('ok',"Project loaded: 'ProductionLine_V3.ap18'"),
+       L('info','Path matches Archive.ExpectedProjectPath ✓'),
+       L('info','Querying Project.IsModified…')]),
+    S('nd-d4','e-d3yes','ok','Project clean ✓ · [Step 4] Online comparison…',
+      [L('ok','No unsaved changes — project is clean'),
+       L('info','Initiating online comparison with PLC (192.168.0.1)…')]),
+    S('nd-archive','e-d4yes','ok','1:1 match ✓ · [Step 5] Archiving…',
+      [L('ok','Online comparison: Project is 1:1 with PLC firmware ✓'),
+       L('step','══  Starting archive operation  ══'),
+       L('info',`Target: D:\\Archives\\ProductionLine_V3_${today()}.zap18`),
+       L('info','Polly retry policy: max 3 · exponential back-off'),
+       L('info','ArchiveProject() — attempt 1/3…')]),
+    S('nd-archok','e-arc-ok','ok','Archive complete ✓ · CRC verified',
+      [L('ok','Archive written successfully (attempt 1/3)'),
+       L('info','Computing CRC32 checksum…'),
+       L('ok',`CRC32: 0x${fakeCrc()} ✓`),
+       L('ok','Created: HOST.archok'),
+       L('step','══  ✅  MARCH operation SUCCEEDED  ══')],
+      'ok'),
+  ]},
+
+  // ─ 1: TIA Not Running ───────────────────────────────────────
+  { name: 'TIA Not Running (auto-start)', steps: [
+    ...preamble(guid8()),
+    S('nd-d1','e-init-d1','base','[Step 1] Checking TIA Portal process…',
+      [L('info','Querying OS for Siemens.TIA.Portal.exe…')]),
+    S('nd-launch','e-d1no','wrn','TIA not found · launching process…',
+      [L('wrn','TIA Portal process NOT detected'),
+       L('info','Executing: C:\\Program Files\\Siemens\\Automation\\TIA_V18\\bin\\TIA.exe'),
+       L('info','Waiting for Openness API… (polling every 5 s, timeout 120 s)')]),
+    S('nd-d1','e-launch-d1','wrn','[Step 1 RETRY] TIA process check…',
+      [L('info','TIA Portal initializing — splash visible…'),
+       L('info','Openness API not yet available — retrying…'),
+       L('info','[Step 1 RETRY] Querying process status…')]),
+    S('nd-d2','e-d1yes','ok','TIA running ✓ · [Step 2] Checking project…',
+      [L('ok','TIA Portal is now running (PID: 9104)'),
+       L('info','Reading active project context…')]),
+    S('nd-d3','e-d2yes','ok','Project loaded ✓ · [Step 3] Save state…',
+      [L('ok',"Project loaded: 'ProductionLine_V3.ap18'"),
+       L('info','Checking Project.IsModified…')]),
+    S('nd-d4','e-d3yes','ok','Clean ✓ · [Step 4] Online comparison…',
+      [L('ok','Project is clean'),
+       L('info','Online comparison with PLC…')]),
+    S('nd-archive','e-d4yes','ok','1:1 ✓ · [Step 5] Archiving…',
+      [L('ok','Project is 1:1 with PLC ✓'),
+       L('step','══  Starting archive  ══'),
+       L('info','ArchiveProject() — attempt 1/3…')]),
+    S('nd-archok','e-arc-ok','ok','Archive complete ✓',
+      [L('ok','Archive completed successfully'),
+       L('ok',`CRC32: 0x${fakeCrc()} ✓`),
+       L('ok','Created: HOST.archok'),
+       L('step','══  ✅  MARCH operation SUCCEEDED  ══')],
+      'ok'),
+  ]},
+
+  // ─ 2: No Project Loaded ─────────────────────────────────────
+  { name: 'No Project Loaded', steps: [
+    ...preamble(guid8()),
+    S('nd-d1','e-init-d1','base','[Step 1] Checking TIA Portal process…',
+      [L('info','Querying OS for Siemens.TIA.Portal.exe…')]),
+    S('nd-d2','e-d1yes','ok','TIA running ✓ · [Step 2] Checking project…',
+      [L('ok','TIA Portal is running (PID: 8472)'),
+       L('info','Reading active project context…')]),
+    S('nd-err1','e-d2no','err','No expected project loaded — FAIL',
+      [L('err','No project is open in TIA Portal'),
+       L('err','Expected: ProductionLine_V3.ap18'),
+       L('err','Actual: (none)'),
+       L('err','Archive aborted — project not loaded')]),
+    S('nd-hosterr','e-err1-r','err','Creating HOST.error',
+      [L('err','Created: HOST.error'),
+       L('step','══  ❌  MARCH operation FAILED  ══'),
+       L('info','Tray indicator: 🔴 blinking'),
+       L('info','Action: Load expected project in TIA Portal, then retry')],
+      'err'),
+  ]},
+
+  // ─ 3: Unsaved Changes ───────────────────────────────────────
+  { name: 'Unsaved Changes', steps: [
+    ...preamble(guid8()),
+    S('nd-d1','e-init-d1','base','[Step 1] Checking TIA Portal process…',
+      [L('info','Querying OS for Siemens.TIA.Portal.exe…')]),
+    S('nd-d2','e-d1yes','ok','TIA running ✓ · [Step 2] Checking project…',
+      [L('ok','TIA Portal is running (PID: 8472)'),
+       L('info','Reading active project context…')]),
+    S('nd-d3','e-d2yes','ok','Project loaded ✓ · [Step 3] Save state…',
+      [L('ok',"Project loaded: 'ProductionLine_V3.ap18'"),
+       L('info','Querying Project.IsModified via Openness API…')]),
+    S('nd-err2','e-d3no','err','Unsaved changes detected — FAIL',
+      [L('wrn','Project.IsModified = true'),
+       L('err','Unsaved changes detected in TIA Portal editor'),
+       L('err','Archive aborted — project must be saved first'),
+       L('info','Action: Save project manually and reissue HOST.march')]),
+    S('nd-hosterr','e-err2-r','err','Creating HOST.error',
+      [L('err','Created: HOST.error'),
+       L('step','══  ❌  MARCH operation FAILED  ══'),
+       L('info','Tray indicator: 🔴 blinking')],
+      'err'),
+  ]},
+
+  // ─ 4: PLC Mismatch ──────────────────────────────────────────
+  { name: 'PLC Mismatch', steps: [
+    ...preamble(guid8()),
+    S('nd-d1','e-init-d1','base','[Step 1] Checking TIA Portal process…',
+      [L('info','Querying OS for Siemens.TIA.Portal.exe…')]),
+    S('nd-d2','e-d1yes','ok','TIA running ✓ · [Step 2] Checking project…',
+      [L('ok','TIA Portal is running (PID: 8472)'),
+       L('info','Reading active project context…')]),
+    S('nd-d3','e-d2yes','ok','Project loaded ✓ · [Step 3] Save state…',
+      [L('ok',"Project loaded: 'ProductionLine_V3.ap18'"),
+       L('info','Querying Project.IsModified…')]),
+    S('nd-d4','e-d3yes','ok','Clean ✓ · [Step 4] Online comparison…',
+      [L('ok','Project is clean'),
+       L('info','Connecting to PLC (192.168.0.1, S7-1500)…'),
+       L('info','Running online comparison…')]),
+    S('nd-err3','e-d4no','err','PLC mismatch — FAIL',
+      [L('wrn','Online comparison result: INCONSISTENT'),
+       L('err','Project checksum: 0xF1A3 ≠ PLC checksum: 0x9C2B'),
+       L('err','Project is NOT 1:1 with PLC firmware'),
+       L('err','Archive aborted — consistency check failed'),
+       L('info','Action: Download project to PLC, then retry')]),
+    S('nd-hosterr','e-err3-r','err','Creating HOST.error',
+      [L('err','Created: HOST.error'),
+       L('step','══  ❌  MARCH operation FAILED  ══'),
+       L('info','Tray indicator: 🔴 blinking')],
+      'err'),
+  ]},
+
+  // ─ 5: Archive Failed ────────────────────────────────────────
+  { name: 'Archive Failed', steps: [
+    ...preamble(guid8()),
+    S('nd-d1','e-init-d1','base','[Step 1] Checking TIA Portal process…',
+      [L('info','Querying OS for Siemens.TIA.Portal.exe…')]),
+    S('nd-d2','e-d1yes','ok','TIA running ✓ · [Step 2] Checking project…',
+      [L('ok','TIA Portal is running (PID: 8472)'),
+       L('info','Reading active project context…')]),
+    S('nd-d3','e-d2yes','ok','Project loaded ✓ · [Step 3] Save state…',
+      [L('ok',"Project loaded: 'ProductionLine_V3.ap18'"),
+       L('info','Querying Project.IsModified…')]),
+    S('nd-d4','e-d3yes','ok','Clean ✓ · [Step 4] Online comparison…',
+      [L('ok','Project is clean'),
+       L('info','Online comparison with PLC…')]),
+    S('nd-archive','e-d4yes','ok','All checks passed · [Step 5] Archiving…',
+      [L('ok','Project is 1:1 with PLC ✓'),
+       L('step','══  Starting archive operation  ══'),
+       L('info','ArchiveProject() — attempt 1/3…'),
+       L('err','EngineeringException: Access denied to archive path'),
+       L('info','Polly back-off: 2 s…'),
+       L('info','ArchiveProject() — attempt 2/3…'),
+       L('err','EngineeringException: Access denied to archive path'),
+       L('info','Polly back-off: 4 s…'),
+       L('info','ArchiveProject() — attempt 3/3…'),
+       L('err','EngineeringException: Access denied to archive path'),
+       L('err','All 3 retry attempts exhausted')]),
+    S('nd-archerr','e-arc-err','err','Archive failed after 3 retries',
+      [L('err','ArchiveFailed — EngineeringException after 3 attempts'),
+       L('info','Check: output directory permissions'),
+       L('info','Check: free disk space on target drive')]),
+    S('nd-hosterr','e-aerr-r','err','Creating HOST.error',
+      [L('err','Created: HOST.error'),
+       L('step','══  ❌  MARCH operation FAILED  ══'),
+       L('info','Tray indicator: 🔴 blinking')],
+      'err'),
+  ]},
+];
+
+// ═══════════════════════════════════════════════════════════════
+//  ENGINE
+// ═══════════════════════════════════════════════════════════════
+const ALL_NODES = [
+  'nd-start','nd-init','nd-d1','nd-launch',
+  'nd-d2','nd-err1','nd-d3','nd-err2',
+  'nd-d4','nd-err3','nd-archive','nd-archok','nd-archerr','nd-hosterr'
+];
+
+// Node type lookup (for active CSS class)
+const IS_DEC = new Set(['nd-d1','nd-d2','nd-d3','nd-d4']);
+
+// Edges & their original marker-end defaults
+const EDGE_DEFAULTS = {
+  'e-s-init':   {cls:'e-base',mk:'url(#ah)'},
+  'e-init-d1':  {cls:'e-base',mk:'url(#ah)'},
+  'e-d1yes':    {cls:'e-ok',  mk:'url(#ahok)'},
+  'e-d1no':     {cls:'e-wrn', mk:'url(#ahwr)'},
+  'e-launch-d1':{cls:'e-wrn', mk:'url(#ahwr)'},
+  'e-d2yes':    {cls:'e-ok',  mk:'url(#ahok)'},
+  'e-d2no':     {cls:'e-err', mk:'url(#aher)'},
+  'e-d3yes':    {cls:'e-ok',  mk:'url(#ahok)'},
+  'e-d3no':     {cls:'e-err', mk:'url(#aher)'},
+  'e-d4yes':    {cls:'e-ok',  mk:'url(#ahok)'},
+  'e-d4no':     {cls:'e-err', mk:'url(#aher)'},
+  'e-arc-ok':   {cls:'e-ok',  mk:'url(#ahok)'},
+  'e-arc-err':  {cls:'e-err', mk:'url(#aher)'},
+  'e-err1-r':   {cls:'e-err', mk:'none'},
+  'e-err2-r':   {cls:'e-err', mk:'none'},
+  'e-err3-r':   {cls:'e-err', mk:'none'},
+  'e-aerr-r':   {cls:'e-err', mk:'none'},
+  'e-rail-he':  {cls:'e-err', mk:'url(#aher)'},
+};
+
+const AK_MAP = { base:'aha', ok:'ahao', err:'ahae', wrn:'ahaw' };
+const AK_STROKE = { base:'var(--cyan)', ok:'var(--green)', err:'var(--red)', wrn:'var(--orange)' };
+
+let timer = null;
+let scenario = null;
+let step = 0;
+let running = false;
+
+function nodeActive(id, isDecision) {
+  const el = $(id); if (!el) return;
+  el.classList.remove('nst-proc','nst-dec','nst-done','nst-fail','nst-final-ok','nst-final-err');
+  el.classList.add(isDecision ? 'nst-dec' : 'nst-proc');
+}
+function nodeDone(id) {
+  const el = $(id); if (!el) return;
+  el.classList.remove('nst-proc','nst-dec','nst-final-ok','nst-final-err');
+  el.classList.add('nst-done');
+}
+function nodeError(id) {
+  const el = $(id); if (!el) return;
+  el.classList.remove('nst-proc','nst-dec','nst-done','nst-final-ok','nst-final-err');
+  el.classList.add('nst-fail');
+}
+function nodeFinal(id, kind) {
+  const el = $(id); if (!el) return;
+  el.classList.remove('nst-proc','nst-dec','nst-done','nst-fail');
+  el.classList.add(kind === 'ok' ? 'nst-final-ok' : 'nst-final-err');
+}
+function clearNode(id) {
+  const el = $(id); if (!el) return;
+  el.classList.remove('nst-proc','nst-dec','nst-done','nst-fail','nst-final-ok','nst-final-err');
+}
+
+function edgeActivate(id, kind) {
+  const el = $(id); if (!el) return;
+  el.style.stroke = AK_STROKE[kind];
+  el.style.strokeWidth = '2';
+  el.setAttribute('marker-end', `url(#${AK_MAP[kind]})`);
+}
+function edgeReset(id) {
+  const el = $(id); if (!el) return;
+  el.style.stroke = '';
+  el.style.strokeWidth = '';
+  const def = EDGE_DEFAULTS[id];
+  if (def) el.setAttribute('marker-end', def.mk);
+}
+
+function addLog(kind, msg) {
+  const c = $('log');
+  const kMap = {info:'INFO',ok:'OK',err:'ERROR',wrn:'WARN',step:'STEP'};
+  if (kind === 'step') {
+    const sep = document.createElement('hr');
+    sep.className = 'le-sep'; c.appendChild(sep);
+  }
+  const d = document.createElement('div');
+  const cssKind = kind === 'ok' ? 'ok' : kind === 'err' ? 'err' : kind === 'wrn' ? 'wrn' : kind === 'step' ? 'step' : 'info';
+  d.className = `le ${cssKind}`;
+  d.innerHTML = `<span class="le-ts">${ts()}</span>`+
+                `<span class="le-lvl">${kMap[kind]||'INFO'}</span>`+
+                `<span class="le-msg">${msg}</span>`;
+  c.appendChild(d);
+  c.scrollTop = c.scrollHeight;
+  $('lcnt').textContent = c.querySelectorAll('.le').length;
+}
+
+function setProgress(cur, tot) {
+  $('sc-cur').textContent = cur;
+  $('sc-tot').textContent = tot;
+  $('prog').style.width = (tot > 0 ? Math.round(cur/tot*100) : 0) + '%';
+}
+
+function setInfo(txt, live=true) {
+  $('step-info').textContent = txt;
+  $('pdot').className = 'pulse-dot' + (live ? ' live' : '');
+}
+
+function setBadge(kind, txt) {
+  const b = $('badge');
+  b.className = 'badge ' + kind;
+  b.textContent = txt;
+}
+
+function resetSim() {
+  clearTimeout(timer);
+  running = false; scenario = null; step = 0;
+  ALL_NODES.forEach(clearNode);
+  Object.keys(EDGE_DEFAULTS).forEach(edgeReset);
+  $('log').innerHTML = '';
+  $('lcnt').textContent = '0';
+  $('badge').className = 'badge';
+  $('prog').style.width = '0%';
+  $('sc-cur').textContent = '0';
+  $('sc-tot').textContent = '0';
+  document.querySelectorAll('.sc-btn').forEach(b => { b.disabled=false; b.classList.remove('sel'); });
+  $('resetBtn').disabled = false;
+  setInfo('Idle — select a scenario above  ·  keyboard: 1–6 run · R reset', false);
+}
+
+function runScenario(idx) {
+  if (running) return;
+  resetSim();
+  scenario = SCENARIOS[idx];
+  step = 0; running = true;
+
+  document.querySelectorAll('.sc-btn').forEach((b,i) => { b.disabled=true; b.classList.toggle('sel',i===idx); });
+  $('resetBtn').disabled = true;
+
+  setBadge('run','⟳ Running');
+  setInfo(`Scenario: ${scenario.name}`);
+  addLog('info', `─── Simulation start: ${scenario.name} ───`);
+  setProgress(0, scenario.steps.length);
+  tick();
+}
+
+function tick() {
+  if (step >= scenario.steps.length) { finish(); return; }
+  const s = scenario.steps[step];
+  const total = scenario.steps.length;
+
+  // Mark previous node done/error (if not the same node revisited)
+  if (step > 0) {
+    const prev = scenario.steps[step - 1];
+    if (!prev.finalState) {
+      const isErr = prev.ek === 'err';
+      isErr ? nodeError(prev.node) : nodeDone(prev.node);
+    }
+  }
+
+  // Animate edge → then node
+  const doNode = () => {
+    const isDec = IS_DEC.has(s.node);
+    nodeActive(s.node, isDec);
+    s.log.forEach(l => addLog(l.k, l.m));
+    step++;
+    setProgress(step, total);
+    setInfo(s.info);
+
+    if (s.finalState) {
+      setTimeout(() => {
+        nodeFinal(s.node, s.finalState);
+        if (s.finalState === 'ok')  setBadge('ok',  '✓ HOST.archok');
+        if (s.finalState === 'err') setBadge('err', '✗ HOST.error');
+        setInfo(`Simulation complete — ${scenario.name}`, false);
+        finish();
+      }, spd() * 0.7);
+    } else {
+      timer = setTimeout(tick, spd());
+    }
+  };
+
+  if (s.edge) {
+    edgeActivate(s.edge, s.ek);
+    // special: also activate rail & rail→he when going to hosterr
+    if (s.node === 'nd-hosterr') {
+      edgeActivate('rail-v', 'err');
+      edgeActivate('e-rail-he', 'err');
+    }
+    timer = setTimeout(doNode, spd() * 0.35);
+  } else {
+    doNode();
+  }
+}
+
+function finish() {
+  running = false;
+  document.querySelectorAll('.sc-btn').forEach(b => b.disabled = false);
+  $('resetBtn').disabled = false;
+}
+
+// ─── copy / clear ─────────────────────────────────────────────
+function copyLog() {
+  const txt = [...$('log').querySelectorAll('.le')].map(e =>
+    `[${e.querySelector('.le-ts').textContent}] [${e.querySelector('.le-lvl').textContent}] ${e.querySelector('.le-msg').textContent}`
+  ).join('\n');
+  navigator.clipboard.writeText(txt).then(() => {
+    const b = event.target; const orig = b.textContent;
+    b.textContent = '✓ Copied'; setTimeout(() => b.textContent = orig, 1600);
+  });
+}
+function clearLog() {
+  if (!running) { $('log').innerHTML=''; $('lcnt').textContent='0'; }
+}
+
+// ─── keyboard shortcuts ────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (!e.ctrlKey && !e.altKey && !e.metaKey) {
+    if (e.key >= '1' && e.key <= '6') runScenario(+e.key - 1);
+    if (e.key === 'r' || e.key === 'R') resetSim();
+  }
+});
+</script>
+</body>
+</html>
